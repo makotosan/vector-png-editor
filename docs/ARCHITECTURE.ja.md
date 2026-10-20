@@ -32,7 +32,7 @@ Monaco、script、style、workerをローカル同梱します。制限Content S
 
 ## 5. リポジトリと配布
 
-予定のsource pathです（この段階では計画・根拠・toolのみ存在します）。
+予定のsource pathです（実験的Coreは実装済みで、実装範囲は[現在の進捗](CORE_PROGRESS.ja.md)を参照してください）。
 
 ```text
 vector-png-editor/

@@ -4,9 +4,11 @@
 
 ## Baseline and claims
 
-English SPEC.md at [8238ebdaa136f448affa53133b99ee5afde5765a](https://github.com/makotosan/vector-png-spec/tree/8238ebdaa136f448affa53133b99ee5afde5765a) is normative; SPEC.ja.md is a full informative translation. See [spec-reference.json](../spec-reference.json) and [implementation-reference.json](../implementation-reference.json). This records research of upstream code; the new Editor Core is not implemented and no complete conformance is claimed. Wire v1 is unchanged. Existing files need no format migration.
+English SPEC.md at [8238ebdaa136f448affa53133b99ee5afde5765a](https://github.com/makotosan/vector-png-spec/tree/8238ebdaa136f448affa53133b99ee5afde5765a) is normative; SPEC.ja.md is a full informative translation. See [spec-reference.json](../spec-reference.json) and [implementation-reference.json](../implementation-reference.json). This records historical upstream research plus current experimental Core work in [CORE_PROGRESS.md](CORE_PROGRESS.md) and [CLI.md](CLI.md). The new Core resolves the three XML gaps, separates passive discovery from profile/rendering and adds explicit PNG/raster checks; ancillary/language/raster audits remain open. No complete conformance is claimed. Wire v1 is unchanged. Existing files need no format migration.
 
-## Requirement status
+## Historical upstream requirement status
+
+These rows describe the original upstream baseline. For the new package, the three XML regressions are fixed; passive reads and shared rendering are implemented. Current limits, supported checks, tests and remaining audits are recorded in [CORE_PROGRESS.md](CORE_PROGRESS.md), not inferred from these historical rows.
 
 | Requirement | Evidence / remaining work |
 | --- | --- |

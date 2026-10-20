@@ -9,14 +9,16 @@
 | 条件 | 現在のEditor状態 |
 | --- | --- |
 | 既存vector-pngの起動、SVG編集、PNG保存、原文の損失なし再抽出 | 未実装・未検証 |
-| PNG構造／順序／CRC、decode raster、preview検証結果の分離 | 上流の有限の根拠のみ。Editor未検証 |
+| PNG構造／順序／CRC、decode raster、preview検証結果の分離 | 実験的Core subsetを検証済み。全container監査とeditor受入は未完了 |
 | Monaco強調／補完／検証／検索置換とVS Code undo／redo同期 | 未実装・未検証 |
 | 別名保存、revert、backup／hot exit、1024×1024透過新規文書 | 未実装・未検証 |
 | Python／native setup失敗、更新／取消、rollbackで元ファイルとdirty編集を保護 | 未実装・未検証 |
 | 外部Codex／CLI更新とVS Code未保存編集の双方を保護し競合を通知 | 未実装・未検証 |
-| 3 OSでPython 3.11〜3.13のclean導入後、対応matrixを確定 | 既存Windows Python 3.13回帰実行のみ。matrix未検証 |
-| local Monaco／CSPを含むoffline package VSIXと独立pip wheel／sdist導入 | 未実装・未検証 |
+| 3 OSでPython 3.11〜3.13のclean導入後、対応matrixを確定 | ローカルWindows Python 3.13 Core／clean wheelを検証。hosted 9組matrixを追加し、実runを確認する |
+| local Monaco／CSPを含むoffline package VSIXと独立pip wheel／sdist導入 | Core開発wheel／sdistとclean導入を検証。全6コマンド配布とVSIXは未完了 |
 | GitHubタグでtest／build／VSIXとpip成果物の公開、GitHub Releasesからdownload・再導入 | 未設定・未検証 |
+
+現在のCore根拠と残る制限は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録します。editor実機の全条件は未完了です。
 
 ## 作業とbranch方針
 

@@ -2,6 +2,8 @@
 
 [日本語](PHASE0.ja.md)
 
+Historical research snapshot before Core implementation. Current results and resolved XML gaps are in [CORE_PROGRESS.md](CORE_PROGRESS.md); upstream code and this baseline evidence remain unchanged.
+
 ## 1. Evidence and scope
 
 Reviewed the pinned English SPEC.md, safe-svg-v1 and IMPLEMENTATIONS.md at [8238ebdaa136f448affa53133b99ee5afde5765a](https://github.com/makotosan/vector-png-spec/tree/8238ebdaa136f448affa53133b99ee5afde5765a), plus the existing Python project at [d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2](https://github.com/makotosan/vector-png/tree/d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2): vector_png.py, pyproject.toml, requirements, tests, examples, CI, license, OSS review and compatibility record. GitHub confirms source blob 4828b4bb60a97704161bf71e70eaeff8fc97ef49. Local tested source SHA-256 is recorded in implementation-reference.json. Local repository folders are source snapshots inside an uncommitted parent Git repository, not independent upstream clones. No history was inferred from those folders.

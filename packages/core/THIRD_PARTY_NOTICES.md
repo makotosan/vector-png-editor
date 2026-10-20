@@ -1,0 +1,7 @@
+# Third-party notices and source provenance
+
+The safe-svg-v1 allowlist and rendering adapter in src/vector_png_editor/_backend.py are adapted from makotosan/vector-png, vector_png.py at commit d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2 (blob 4828b4bb60a97704161bf71e70eaeff8fc97ef49). Copyright (c) 2026 makotosan and vector-png contributors, MIT. The full MIT notice is preserved in LICENSE. Changes replace lexical XML inspection with parser-aware checks, launch a package worker, and classify rendering timeouts. No optional normalization implementation is imported.
+
+tests/fixtures/vectors.json is copied without content changes from makotosan/vector-png-spec at 8238ebdaa136f448affa53133b99ee5afde5765a, fixtures/vectors.json. Copyright (c) 2026 makotosan, MIT; the MIT grant/disclaimer is preserved in LICENSE. These 21 cases are finite evidence, not certification.
+
+Runtime dependencies are declared rather than bundled: Pillow 13.0.0 (MIT-CMU), CairoSVG 2.9.1 (LGPL-3.0-or-later), defusedxml 0.7.1 (PSF). Their dependencies retain their own licenses. Native Cairo is separately installed and is LGPL-2.1/MPL-1.1 dual licensed. No native DLL, font, Python interpreter, browser or Monaco code is included in this Core wheel. Verify exact transitive/native licenses and distribution obligations before bundling them; the package's MIT license does not replace their terms. Exact direct pins are reproducibility choices, not proof of dependency safety or full transitive locking.
