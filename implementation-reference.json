@@ -6,6 +6,6 @@
   "source": "vector_png.py",
   "source_blob": "4828b4bb60a97704161bf71e70eaeff8fc97ef49",
   "local_tested_source_sha256": "02d98644810c27ad887765ac3ab812246fd114cf885ca7b727fc107ee784dd2c",
-  "note": "Research/reuse baseline; production Core has not yet been imported."
+  "note": "Research/reuse baseline; allowlist and rendering adapter are adapted in packages/core/src/vector_png_editor/_backend.py with parser-aware XML handling and a package worker. Original upstream code is unchanged."
 }
 

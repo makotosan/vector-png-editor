@@ -4,9 +4,11 @@
 
 ## 基準と主張
 
-[8238ebdaa136f448affa53133b99ee5afde5765a](https://github.com/makotosan/vector-png-spec/tree/8238ebdaa136f448affa53133b99ee5afde5765a)の英語SPEC.mdが正規仕様、SPEC.ja.mdは全文の参考訳です。[spec-reference.json](../spec-reference.json)と[implementation-reference.json](../implementation-reference.json)を参照してください。これは上流コードの調査記録で、新Editor Coreは未実装であり、完全準拠は主張しません。wire v1は変更せず、既存ファイルの形式移行は不要です。
+[8238ebdaa136f448affa53133b99ee5afde5765a](https://github.com/makotosan/vector-png-spec/tree/8238ebdaa136f448affa53133b99ee5afde5765a)の英語SPEC.mdが正規仕様、SPEC.ja.mdは全文の参考訳です。[spec-reference.json](../spec-reference.json)と[implementation-reference.json](../implementation-reference.json)を参照してください。これは過去の上流調査と[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)・[CLI.ja.md](CLI.ja.md)に記録した現在の実験的Core作業を扱います。新CoreはXML不足3点を解消し、受動発見とprofile／描画を分離し、PNG／rasterの明示検査を追加しましたが、ancillary／language／raster監査は未完了です。完全準拠は主張しません。wire v1は変更せず、既存ファイルの形式移行は不要です。
 
-## 要件の状態
+## 過去の上流要件の状態
+
+以下の行は元の上流基準を記録します。新packageではXML回帰3点を修正し、受動読取と共通描画を実装しました。現在の上限、対応検査、test、残る監査は過去の行から推測せず、[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)を参照してください。
 
 | 要件 | 根拠・残る作業 |
 | --- | --- |

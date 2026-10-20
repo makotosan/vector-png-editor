@@ -1,0 +1,138 @@
+{
+  "spec": "wire-v1-draft-0.1",
+  "fixtures": [
+    {
+      "name": "basic",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmou0AdAAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": true,
+      "reason": "One red pixel and its SVG source",
+      "source_base64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPg=="
+    },
+    {
+      "name": "source-after-idat",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4AQEFAPr/AP8AAP8FAAH/+lyI0QAAAIhpVFh0dmVjdG9yLXBuZy5zdmcAAQAAAHgBAWoAlf88c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEiIGhlaWdodD0iMSI+PHJlY3Qgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0icmVkIi8+PC9zdmc+KwYhZqLtAHQAAAAASUVORK5CYII=",
+      "container_valid": true,
+      "reason": "iTXt may follow IDAT",
+      "source_base64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPg=="
+    },
+    {
+      "name": "language-fields",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAl2lUWHR2ZWN0b3ItcG5nLnN2ZwABAGphAFNWRyDjgr3jg7zjgrkAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmtl+TGgAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": true,
+      "reason": "Valid non-empty text fields",
+      "source_base64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPg=="
+    },
+    {
+      "name": "utf8-bom",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAi2lUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBbQCS/++7vzxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4vlCPPG/8dKAAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": true,
+      "reason": "Preserve BOM bytes on extraction",
+      "source_base64": "77u/PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPg=="
+    },
+    {
+      "name": "escaped-and-comment",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAsmlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBlABr/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48dGl0bGU+QSAmYW1wOyBCPC90aXRsZT48IS0tIDw/aW5lcnQ/PiAtLT48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz6gUy3Yk9N2jgAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": true,
+      "reason": "XML escaping and inert comments are allowed",
+      "source_base64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjx0aXRsZT5BICZhbXA7IEI8L3RpdGxlPjwhLS0gPD9pbmVydD8+IC0tPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPg=="
+    },
+    {
+      "name": "different-preview",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmou0AdAAAABBJREFUeAEBBQD6/wAAAP//AwIB/x48rkkAAAAASUVORK5CYII=",
+      "container_valid": true,
+      "reason": "Container-valid; red SVG versus blue raster. Preview NOT verified",
+      "source_base64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPg=="
+    },
+    {
+      "name": "unsafe-svg",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAArmlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBkABv/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48c2NyaXB0Pi8qIGluZXJ0IHRlc3QgZGF0YSAqLzwvc2NyaXB0PjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPlFcLmGzdyqhAAAAEElEQVR4AQEFAPr/AP8AAP8FAAH/+lyI0QAAAABJRU5ErkJggg==",
+      "container_valid": true,
+      "reason": "Container-valid but MUST be rejected by safe-svg-v1 before rendering",
+      "source_base64": "PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxzY3JpcHQ+LyogaW5lcnQgdGVzdCBkYXRhICovPC9zY3JpcHQ+PHJlY3Qgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0icmVkIi8+PC9zdmc+"
+    },
+    {
+      "name": "missing-source",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEElEQVR4AQEFAPr/AP8AAP8FAAH/+lyI0QAAAABJRU5ErkJggg==",
+      "container_valid": false,
+      "reason": "No source"
+    },
+    {
+      "name": "duplicate-source",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmou0AdAAAAIhpVFh0dmVjdG9yLXBuZy5zdmcAAQAAAHgBAWoAlf88c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEiIGhlaWdodD0iMSI+PHJlY3Qgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0icmVkIi8+PC9zdmc+KwYhZqLtAHQAAAAQSURBVHgBAQUA+v8A/wAA/wUAAf/6XIjRAAAAAElFTkSuQmCC",
+      "container_valid": false,
+      "reason": "Ambiguous source"
+    },
+    {
+      "name": "wrong-chunk-type",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAeXRFWHR2ZWN0b3ItcG5nLnN2ZwA8c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEiIGhlaWdodD0iMSI+PHJlY3Qgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0icmVkIi8+PC9zdmc+calp8QAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": false,
+      "reason": "iTXt required"
+    },
+    {
+      "name": "uncompressed",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAfWlUWHR2ZWN0b3ItcG5nLnN2ZwAAAAAAPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPuAxblwAAAAQSURBVHgBAQUA+v8A/wAA/wUAAf/6XIjRAAAAAElFTkSuQmCC",
+      "container_valid": false,
+      "reason": "Compression flag must be 1"
+    },
+    {
+      "name": "wrong-method",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAQAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmM+PutQAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": false,
+      "reason": "Compression method must be 0"
+    },
+    {
+      "name": "trailing-zlib",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAjGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmanVuazGu5JcAAAAQSURBVHgBAQUA+v8A/wAA/wUAAf/6XIjRAAAAAElFTkSuQmCC",
+      "container_valid": false,
+      "reason": "Trailing compressed data"
+    },
+    {
+      "name": "invalid-utf8",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAH2lUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBAQD+//8BAAEAPXXyQQAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": false,
+      "reason": "UTF-8 required"
+    },
+    {
+      "name": "wrong-root",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAJGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBBgD5/zxzdmcvPgdWAfowo7dHAAAAEElEQVR4AQEFAPr/AP8AAP8FAAH/+lyI0QAAAABJRU5ErkJggg==",
+      "container_valid": false,
+      "reason": "SVG namespace required"
+    },
+    {
+      "name": "dtd",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAVWlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBNwDI/zwhRE9DVFlQRSBzdmc+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciLz7v7RFr2dsIdQAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYII=",
+      "container_valid": false,
+      "reason": "DTD forbidden"
+    },
+    {
+      "name": "processing-instruction",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAlmlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBeACH/zw/dGVzdCBpbmVydD8+PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxIiBoZWlnaHQ9IjEiPjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9InJlZCIvPjwvc3ZnPl/WJmAnpqbpAAAAEElEQVR4AQEFAPr/AP8AAP8FAAH/+lyI0QAAAABJRU5ErkJggg==",
+      "container_valid": false,
+      "reason": "PI forbidden"
+    },
+    {
+      "name": "wrong-xml-encoding",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAs2lUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBlQBq/zw/eG1sIHZlcnNpb249IjEuMCIgZW5jb2Rpbmc9IklTTy04ODU5LTEiPz48c3ZnIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgd2lkdGg9IjEiIGhlaWdodD0iMSI+PHJlY3Qgd2lkdGg9IjEiIGhlaWdodD0iMSIgZmlsbD0icmVkIi8+PC9zdmc+oW0uIb8pi9gAAAAQSURBVHgBAQUA+v8A/wAA/wUAAf/6XIjRAAAAAElFTkSuQmCC",
+      "container_valid": false,
+      "reason": "Conflicting declared encoding"
+    },
+    {
+      "name": "apng-marker",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmou0AdAAAAAhhY1RMAAAAAQAAAAC0LemgAAAAEElEQVR4AQEFAPr/AP8AAP8FAAH/+lyI0QAAAABJRU5ErkJggg==",
+      "container_valid": false,
+      "reason": "Animation marker forbidden"
+    },
+    {
+      "name": "trailing-file-data",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmou0AdAAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYIJqdW5r",
+      "container_valid": false,
+      "reason": "Trailing file data"
+    },
+    {
+      "name": "bad-crc",
+      "png_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAiGlUWHR2ZWN0b3ItcG5nLnN2ZwABAAAAeAEBagCV/zxzdmcgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB3aWR0aD0iMSIgaGVpZ2h0PSIxIj48cmVjdCB3aWR0aD0iMSIgaGVpZ2h0PSIxIiBmaWxsPSJyZWQiLz48L3N2Zz4rBiFmou0AdAAAABBJREFUeAEBBQD6/wD/AAD/BQAB//pciNEAAAAASUVORK5CYIM=",
+      "container_valid": false,
+      "reason": "Invalid CRC"
+    }
+  ]
+}

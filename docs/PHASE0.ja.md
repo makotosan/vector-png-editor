@@ -2,6 +2,8 @@
 
 [English](PHASE0.md)
 
+Core実装前の調査snapshotです。現在の結果と解消したXML不足は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録し、上流codeとこの基準の根拠は変更していません。
+
 ## 1. 根拠と範囲
 
 [8238ebdaa136f448affa53133b99ee5afde5765a](https://github.com/makotosan/vector-png-spec/tree/8238ebdaa136f448affa53133b99ee5afde5765a)に固定した英語SPEC.md、safe-svg-v1、IMPLEMENTATIONS.md、および既存Pythonプロジェクトの[d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2](https://github.com/makotosan/vector-png/tree/d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2)にあるvector_png.py、pyproject.toml、requirements、tests、examples、CI、license、OSS review、互換性記録を確認しました。GitHubでsource blob 4828b4bb60a97704161bf71e70eaeff8fc97ef49を確認しています。ローカルでテストした原文のSHA-256はimplementation-reference.jsonに記録します。ローカルのrepositoryフォルダーは未コミットの親Gitリポジトリ内のソースsnapshotであり、独立した上流cloneではありません。それらのフォルダーから履歴を推測していません。

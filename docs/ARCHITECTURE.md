@@ -32,7 +32,7 @@ Bundle Monaco, scripts, styles and workers locally. Set restrictive Content Secu
 
 ## 5. Repository and delivery
 
-Planned source paths (only planning/evidence/tools exist at this stage):
+Planned source paths (the experimental Core is now implemented; see [current progress](CORE_PROGRESS.md) for delivered scope):
 
 ```text
 vector-png-editor/

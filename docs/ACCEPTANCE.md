@@ -9,14 +9,16 @@ All rows must pass both automated tests and Windows/macOS/Linux real-machine che
 | Gate | Current Editor status |
 | --- | --- |
 | Open existing vector-png, edit SVG, save PNG and extract source without loss | Not implemented/tested |
-| PNG structure/order/CRC, decoded raster and distinct preview verification outcomes | Upstream finite evidence only; Editor not tested |
+| PNG structure/order/CRC, decoded raster and distinct preview verification outcomes | Experimental Core subset tested; complete container audit and editor acceptance remain open |
 | Monaco highlighting/completion/validation/search-replace and synchronized VS Code undo/redo | Not implemented/tested |
 | Save As, revert, backup/hot exit, new 1024×1024 transparent document | Not implemented/tested |
 | Failed Python/native setup, update/cancel and rollback preserve original and dirty edits | Not implemented/tested |
 | External Codex/CLI updates versus unsaved VS Code edits protect both versions and report conflict | Not implemented/tested |
-| Python 3.11–3.13 clean installation across the three OS, then finalize supported matrix | Only existing Windows Python 3.13 regression run; matrix unverified |
-| Packaged offline VSIX with local Monaco/CSP and independent pip wheel/sdist installation | Not implemented/tested |
+| Python 3.11–3.13 clean installation across the three OS, then finalize supported matrix | Local Windows Python 3.13 Core/clean-wheel checks; hosted nine-cell matrix added, consult actual runs |
+| Packaged offline VSIX with local Monaco/CSP and independent pip wheel/sdist installation | Core development wheel/sdist and clean install tested; six-command distribution and VSIX incomplete |
 | GitHub tag runs tests/build/publication of VSIX and pip artifacts; GitHub Releases download/reinstall | Not configured/tested |
+
+Current Core evidence and remaining limits are in [CORE_PROGRESS.md](CORE_PROGRESS.md). All real-machine editor gates remain open.
 
 ## Work and branch policy
 
