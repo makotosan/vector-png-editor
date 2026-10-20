@@ -1,0 +1,11 @@
+{
+  "repository": "makotosan/vector-png",
+  "revision": "d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2",
+  "version": "0.2.0",
+  "license": "MIT",
+  "source": "vector_png.py",
+  "source_blob": "4828b4bb60a97704161bf71e70eaeff8fc97ef49",
+  "local_tested_source_sha256": "02d98644810c27ad887765ac3ab812246fd114cf885ca7b727fc107ee784dd2c",
+  "note": "Research/reuse baseline; production Core has not yet been imported."
+}
+

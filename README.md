@@ -1,2 +1,16 @@
-# vector-png-editor
-VS Code editor and shared Python CLI for editable SVG-in-PNG images. Phase 0 planning.
+# vector-png Editor
+
+[日本語](README.ja.md)
+
+VS Code Extension + Python Core + independent pip CLI for editing SVG embedded in PNG. SVG is authoritative; PNG raster is derived. Status: Phase 0 research and handoff planning, not a working editor or stable release.
+
+- [Phase 0 findings](docs/PHASE0.md)
+- [Architecture and finalized product requirements](docs/ARCHITECTURE.md)
+- [Compatibility record](docs/SPEC_COMPATIBILITY.md)
+- [Acceptance and release gates](docs/ACCEPTANCE.md)
+- [20 phase/task issues and dependencies](docs/TASKS.md)
+
+The English SPEC.md at the revision in [spec-reference.json](spec-reference.json) is the file-format authority. Its SPEC.ja.md is a full informative translation. The Editor v1.0 handoff names the product plan, not a new wire-format version. Reuse is based on [implementation-reference.json](implementation-reference.json). No complete-conformance claim is made.
+
+Work uses feature branches and pull requests into main. CI success must be required by main protection. The initial README bootstrap is the sole setup commit on main; subsequent work is proposed on codex/phase0-handoff. Stable completion requires both automated and Windows/macOS/Linux real-machine tests. See the acceptance record for unexecuted work.
+
