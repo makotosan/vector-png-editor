@@ -1,0 +1,140 @@
+{
+  "source_sha256": "02d98644810c27ad887765ac3ab812246fd114cf885ca7b727fc107ee784dd2c",
+  "note": "Existing _read_document combines container and profile checks; no rendering in these probes.",
+  "results": [
+    {
+      "name": "basic",
+      "container_expected": true,
+      "accepted": true,
+      "source_exact": true
+    },
+    {
+      "name": "source-after-idat",
+      "container_expected": true,
+      "accepted": true,
+      "source_exact": true
+    },
+    {
+      "name": "language-fields",
+      "container_expected": true,
+      "accepted": true,
+      "source_exact": true
+    },
+    {
+      "name": "utf8-bom",
+      "container_expected": true,
+      "accepted": true,
+      "source_exact": true
+    },
+    {
+      "name": "escaped-and-comment",
+      "container_expected": true,
+      "accepted": false,
+      "error": "XML processing instructions are unsupported"
+    },
+    {
+      "name": "different-preview",
+      "container_expected": true,
+      "accepted": true,
+      "source_exact": true
+    },
+    {
+      "name": "unsafe-svg",
+      "container_expected": true,
+      "accepted": false,
+      "error": "Unsupported SVG element: {http://www.w3.org/2000/svg}script"
+    },
+    {
+      "name": "missing-source",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Expected exactly one embedded SVG"
+    },
+    {
+      "name": "duplicate-source",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Expected exactly one embedded SVG"
+    },
+    {
+      "name": "wrong-chunk-type",
+      "container_expected": false,
+      "accepted": false,
+      "error": "SVG must use compressed iTXt"
+    },
+    {
+      "name": "uncompressed",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid SVG iTXt"
+    },
+    {
+      "name": "wrong-method",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid SVG iTXt"
+    },
+    {
+      "name": "trailing-zlib",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid SVG iTXt"
+    },
+    {
+      "name": "invalid-utf8",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid SVG iTXt"
+    },
+    {
+      "name": "wrong-root",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Root must be SVG in the SVG namespace"
+    },
+    {
+      "name": "dtd",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid or unsafe XML"
+    },
+    {
+      "name": "processing-instruction",
+      "container_expected": false,
+      "accepted": false,
+      "error": "XML processing instructions are unsupported"
+    },
+    {
+      "name": "wrong-xml-encoding",
+      "container_expected": false,
+      "accepted": true
+    },
+    {
+      "name": "apng-marker",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid PNG raster or metadata"
+    },
+    {
+      "name": "trailing-file-data",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid PNG ending"
+    },
+    {
+      "name": "bad-crc",
+      "container_expected": false,
+      "accepted": false,
+      "error": "Invalid PNG CRC"
+    },
+    {
+      "name": "bom-declaration",
+      "accepted": false,
+      "error": "XML processing instructions are unsupported"
+    },
+    {
+      "name": "non-utf8-declaration",
+      "accepted": true
+    }
+  ]
+}
