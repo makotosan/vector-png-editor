@@ -1,6 +1,6 @@
 # vector-png Editor Core (experimental)
 
-Python Core and JSON CLI for passive vector-png inspection, byte-preserving extraction and safe-svg-v1 validation. This development build provides inspect, extract and validate. build, verify, rebuild and the VS Code editor are not implemented yet. It is not a stable release or complete format-conformance claim.
+Python Core and JSON CLI for passive vector-png inspection, byte-preserving extraction and safe-svg-v1 validation. This development build provides inspect, extract, validate, build, verify and rebuild. The VS Code editor is not implemented yet. Writing uses exact source bytes and local RGBA8 preview verification; overwrite requires explicit consent and a SHA-256 revision token, keeps an original snapshot and coordinates Core writers with a lock. Arbitrary external-writer races remain unsupported; see docs/WRITING.md in the repository before overwriting. It is not a stable release or complete format-conformance claim.
 
 Install this package with pip. Python 3.11–3.13 are candidate versions; consult the repository's executed CI and real-machine acceptance record. Native Cairo is installed separately for rendering. On Windows configure VECTOR_PNG_CAIRO_DIR to its DLL directory; on macOS configure the loader path if required by the Cairo installation. inspect/extract and validate --syntax-only do not start CairoSVG rendering.
 

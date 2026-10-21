@@ -2,8 +2,9 @@
 
 [English](README.md)
 
-PNG内のSVGを編集するVS Code拡張＋Python Core＋独立したpip CLIです。SVGを正本、PNGラスターを派生データとします。状態はinspect／extract／validateを持つ実験的Phase 1 Coreであり、VS Code editorと安定版は未実装です。
+PNG内のSVGを編集するVS Code拡張＋Python Core＋独立したpip CLIです。SVGを正本、PNGラスターを派生データとします。状態はinspect／extract／validate／build／verify／rebuildを持つ実験的Phase 1 Coreであり、VS Code editorと安定版は未実装です。
 
+- [書き込みと競合制御の境界](docs/WRITING.ja.md)
 - [現在のCore進捗と根拠](docs/CORE_PROGRESS.ja.md)
 - [操作用JSON CLI契約](docs/CLI.ja.md)
 - [Phase 0調査結果](docs/PHASE0.ja.md)
@@ -14,5 +15,5 @@ PNG内のSVGを編集するVS Code拡張＋Python Core＋独立したpip CLIで�
 
 [spec-reference.json](spec-reference.json)の固定リビジョンにある英語SPEC.mdを形式の正規仕様とし、SPEC.ja.mdを全文の参考訳とします。Editor v1.0引き継ぎ仕様は製品計画の名称であり、新たな保存形式の版ではありません。再利用の基準は[implementation-reference.json](implementation-reference.json)に記録します。完全準拠は主張しません。
 
-作業は機能別branchからmainへのPRで行います。main保護でCI成功を必須にします。最初のREADMEは初期化用の唯一のmain直接コミットであり、その後の作業はcodex/phase0-handoffで提案します。安定版完成には自動テストとWindows／macOS／Linux実機テストの双方が必要です。未実施項目は受入記録を参照してください。
+作業は機能別branchからmainへのPRで行います。main保護でCI成功を必須にします。最初のREADMEが初期化用の唯一のmain直接コミットであり、Phase 0と初期CoreはPRで統合しました。後続作業はcodex/機能branchで行います。安定版完成には自動テストとWindows／macOS／Linux実機テストの双方が必要です。未実施項目は受入記録を参照してください。
 

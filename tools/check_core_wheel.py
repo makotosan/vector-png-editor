@@ -26,4 +26,14 @@ with tempfile.TemporaryDirectory(prefix='vector-png-wheel-') as directory:
     executable = python.parent / ('vector-png-editor.exe' if os.name == 'nt' else 'vector-png-editor')
     run = subprocess.run([str(executable), 'validate', str(source), '--syntax-only'], cwd=root, env=env, capture_output=True, check=True)
     assert json.loads(run.stdout)['result']['render'] == 'not-checked', run.stdout
+    target, rebuilt, extracted = root / 'built.png', root / 'rebuilt.png', root / 'extracted.svg'
+    for arguments in [
+        ['build', str(source), str(target), '--width', '2', '--height', '2'],
+        ['inspect', str(target)], ['verify', str(target)],
+        ['rebuild', str(target), str(rebuilt)], ['extract', str(rebuilt), str(extracted)],
+    ]:
+        run = subprocess.run([str(executable)] + arguments, cwd=root, env=env,
+                             capture_output=True, check=True)
+        assert json.loads(run.stdout)['ok'], run.stdout
+    assert extracted.read_bytes() == source.read_bytes()
     print('Clean wheel installation and packaged rendering worker passed outside source tree.')
