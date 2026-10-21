@@ -5,7 +5,7 @@
   "required": ["protocol", "command", "request_id", "ok"],
   "properties": {
     "protocol": {"const": 1},
-    "command": {"enum": ["inspect", "extract", "validate", null]},
+    "command": {"enum": ["inspect", "extract", "validate", "build", "verify", "rebuild", null]},
     "request_id": {"type": ["string", "null"], "maxLength": 128},
     "ok": {"type": "boolean"},
     "result": {"type": "object"},
@@ -13,7 +13,8 @@
       "type": "object",
       "required": ["code", "message"],
       "properties": {
-        "code": {"enum": ["invalid-arguments", "invalid-container", "invalid-svg", "unsupported-profile", "resource-limit", "ordinary-png", "io-error", "output-exists", "render-failed", "render-timeout"]},
+        "code": {"enum": ["invalid-arguments", "invalid-container", "invalid-svg", "unsupported-profile", "resource-limit", "ordinary-png", "io-error", "output-exists", "render-failed", "render-timeout", "render-mismatch", "conflict", "cancelled"]},
+        "details": {"type": "object"},
         "message": {"type": "string", "maxLength": 2000}
       },
       "additionalProperties": false

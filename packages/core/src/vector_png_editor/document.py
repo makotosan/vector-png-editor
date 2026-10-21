@@ -130,7 +130,12 @@ class Document:
 
 
 def read_document(path):
-    data = bounded_read(path, MAX_PNG)
+    return read_document_bytes(bounded_read(path, MAX_PNG))
+
+
+def read_document_bytes(data):
+    if len(data) > MAX_PNG:
+        raise CoreError("resource-limit", "PNG exceeds byte limit")
     stream = list(chunks(data))
     if not stream or stream[0][0] != b"IHDR" or len(stream[0][1]) != 13:
         raise CoreError("invalid-container", "Missing PNG IHDR")

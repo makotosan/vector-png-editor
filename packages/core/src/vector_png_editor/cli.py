@@ -8,6 +8,7 @@ from .document import bounded_read, extract_source, inspect_document
 from .errors import CoreError, EXIT_CODES
 from .rendering import validate_render
 from .svg import MAX_SVG, validate_source
+from .writing import build_document, rebuild_document, verify_document
 
 
 class Parser(argparse.ArgumentParser):
@@ -30,6 +31,17 @@ def main(argv=None):
     validate.add_argument("--width", type=int, default=1024)
     validate.add_argument("--height", type=int, default=1024)
     validate.add_argument("--syntax-only", action="store_true", help="Skip rendering; explicitly report render not checked")
+    verify = commands.add_parser("verify")
+    verify.add_argument("png", type=Path)
+    for name, source_arg in (("build", "svg"), ("rebuild", "png")):
+        writer = commands.add_parser(name)
+        writer.add_argument(source_arg, type=Path)
+        writer.add_argument("output", type=Path)
+        writer.add_argument("--overwrite", action="store_true")
+        writer.add_argument("--expected-sha256")
+        if name == "build":
+            writer.add_argument("--width", type=int, default=1024)
+            writer.add_argument("--height", type=int, default=1024)
     envelope = {"protocol": 1, "command": None, "request_id": None, "ok": False}
     status = 0
     try:
@@ -42,6 +54,17 @@ def main(argv=None):
             result = inspect_document(args.png)
         elif args.command == "extract":
             result = extract_source(args.png, args.output)
+        elif args.command == "verify":
+            result = verify_document(args.png)
+            if result["preview"] == "mismatch":
+                raise CoreError("render-mismatch", "Preview differs from this renderer", result)
+        elif args.command in {"build", "rebuild"}:
+            options = {"overwrite": args.overwrite, "expected_sha256": args.expected_sha256}
+            if args.command == "build":
+                result = build_document(bounded_read(args.svg, MAX_SVG), args.output,
+                                        args.width, args.height, **options)
+            else:
+                result = rebuild_document(args.png, args.output, **options)
         else:
             source = bounded_read(args.svg, MAX_SVG)
             result = validate_source(source) if args.syntax_only else validate_render(source, args.width, args.height)
@@ -49,8 +72,13 @@ def main(argv=None):
     except CoreError as exc:
         status = EXIT_CODES[exc.code]
         envelope["error"] = {"code": exc.code, "message": str(exc)[:2000]}
+        if exc.details is not None:
+            envelope["error"]["details"] = exc.details
     except OSError as exc:
         status = EXIT_CODES["io-error"]
         envelope["error"] = {"code": "io-error", "message": str(exc)[:2000]}
+    except KeyboardInterrupt:
+        status = EXIT_CODES["cancelled"]
+        envelope["error"] = {"code": "cancelled", "message": "Operation interrupted"}
     print(json.dumps(envelope, ensure_ascii=True, separators=(",", ":")))
     return status

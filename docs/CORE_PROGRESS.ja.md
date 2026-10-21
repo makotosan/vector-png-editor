@@ -4,7 +4,7 @@
 
 ## 実装した範囲
 
-P1-01／P1-02としてpackages/coreに実験的Python package、公開API、inspect／extract／validate JSON CLI、safe profile検査、共通の上限制御CairoSVG rendererを追加しました。Phase 1の開始であり、Phase 0全監査やPhase 1全体の完了を宣言しません。build／verify／rebuild、全bridge transport／取消、拡張、管理venv、releaseは未完了です。Phase 0報告・根拠は過去の基準であり、Coreが存在しないとの記述とXML不足3点が未修正との記述について、新packageでは今回の結果が優先します。元の上流実装は変更していません。
+P1-01／P1-02としてpackages/coreに実験的Python package、公開API、inspect／extract／validate JSON CLI、safe profile検査、共通の上限制御CairoSVG rendererを追加しました。Phase 1の開始であり、Phase 0全監査やPhase 1全体の完了を宣言しません。この初期基準ではbuild／verify／rebuild、全bridge transport／取消、拡張、管理venv、releaseが未完了でした。現在の範囲は下の書き込み追加を参照してください。Phase 0報告・根拠は過去の基準であり、Coreが存在しないとの記述とXML不足3点が未修正との記述について、新packageでは今回の結果が優先します。元の上流実装は変更していません。
 
 移植したallowlist／rendererはmakotosan/vector-pngに固定して帰属を記載しました。MIT noticeと上流fixtureの正確な出典をrepository／packageとwheel licenseに含めます。直接runtime版はPillow 13.0.0、CairoSVG 2.9.1、defusedxml 0.7.1に固定します。推移・native全依存のlockではありません。候補Python metadataは>=3.11,<3.14ですが、対応はこの宣言から推測せず実行済み根拠に限ります。
 
@@ -31,3 +31,9 @@ GitHub再認証後にmain保護を確認しました。PR必須、planning-check
 
 P0-01／P0-02には全ancillary／raster／profile監査、P0-03にはnative依存・license matrix確認、P0-04には拡張host試作が残ります。file追加だけでP1-01／P1-02を閉じません。P1-03はbuild／verify／rebuildとfile競合、P1-04はTypeScript transport全体、schema詳細、取消、出力・memory制御、環境lock、P1-05は全6コマンドのpip配布を扱います。保存形式の変更や未確定の製品選択は行っていません。README、構成、受入、互換性、Phase 0からの案内、新CLI／進捗の日英全文を同期し、意味、表、識別子、コマンド、参照先、数値上限、状態を確認しました。
 
+
+## 書き込み追加 — 2026-10-21
+
+Core 0.1.0.dev2はbuild／verify／rebuild、原文保持生成、厳密なローカルRGBA8比較、独立バックアップと協調リビジョン・ロック検査を備えた一時出力の公開を追加します。完全な契約、SPEC §§3〜7への影響、外部ライターとの競合制御の明示的な制限は[WRITING.ja.md](WRITING.ja.md)を参照してください。P1-03は一部実装です。この文書の先行結果は初期Coreの基準であり、新しい書き込みコードの証明ではありません。現在のローカル・package・CI根拠は実行後に以下へ追記します。仕様固定、キーワード、互換性移行の変更はありません。
+
+書込検証（2026-10-21）：Windows／Python 3.13.5でローカル80件が33.20秒で合格し、置換失敗と後からの同一ファイルへの書き込み後も独立バックアップが保持されることを含みます。0.1.0.dev2のwheel／sdistを作成し、ソースツリー外のclean venvへのwheel導入で6コマンドすべて、BOM／CRLF原文の正確な往復、実際のCairoSVG描画が合格しました。計画文書の構造検査も合格しました。今回追加分のhosted CIは未完了です。初期PR #23のmatrixは9組すべて合格してマージ済みですが、過去の根拠に限ります。影響するREADME、CLI、進捗、互換性、書込の日英ペアを節ごとに照合し、意味、表、例、コマンド、参照先、上限、失敗・競合制御の主張の一致を確認しました。

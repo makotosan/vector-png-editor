@@ -11,10 +11,14 @@ EXIT_CODES = {
     "output-exists": 9,
     "render-failed": 10,
     "render-timeout": 11,
+    "render-mismatch": 12,
+    "conflict": 13,
+    "cancelled": 14,
 }
 
 
 class CoreError(ValueError):
-    def __init__(self, code, message):
+    def __init__(self, code, message, details=None):
         self.code = code
+        self.details = details
         super().__init__(message)

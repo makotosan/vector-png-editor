@@ -25,3 +25,5 @@
 
 [Phase 0](PHASE0.ja.md)にWindows／Python 3.13の実装43件と固定構造10件の合格、およびコンテナー21件＋XML 2件のprobeによる上記不足を記録します。[probe生結果](../evidence/phase0-probes.json)は準拠合格数とせず受入・拒否をそのまま保持します。危険SVGもcontainer-validであり得て、preview一致は独立です。Python 3.11／3.12、全OS対応、拡張host動作、全実機受入は未検証です。任意の上流normalizationを自動でeditorへ移植しません。後続変更では仕様節、fixture、結果、互換性影響、日英全文更新を記録してください。
 
+
+現在の書込範囲（SPEC §§3〜7）：変更しないUTF-8原文の正規圧縮iTXt、IHDR viewport生成、候補検証と厳密なローカルRGBA8検証、明示上書き・バックアップ、協調競合制御を実装しました。任意の外部ライターとの競合、クラッシュ耐久性、エディター保存は残り、[WRITING.ja.md](WRITING.ja.md)を参照してください。wire・固定基準の変更や完全準拠の主張はありません。
