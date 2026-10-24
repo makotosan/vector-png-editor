@@ -1,6 +1,7 @@
 """Versioned JSON CLI for passive inspect/extract and safe validation."""
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from . import __version__
@@ -9,6 +10,7 @@ from .errors import CoreError, EXIT_CODES
 from .rendering import validate_render
 from .svg import MAX_SVG, validate_source
 from .writing import build_document, rebuild_document, verify_document
+from .protocol import parse_request
 
 
 class Parser(argparse.ArgumentParser):
@@ -20,6 +22,7 @@ def main(argv=None):
     parser = Parser(description=__doc__)
     parser.add_argument("--version", action="version", version=__version__)
     parser.add_argument("--request-id", help="Opaque caller ID, echoed in the JSON result")
+    parser.add_argument("--request-json", action="store_true", help="Read one bounded protocol-1 request on stdin; use alone")
     commands = parser.add_subparsers(dest="command", required=True, parser_class=Parser)
     inspect = commands.add_parser("inspect")
     inspect.add_argument("png", type=Path)
@@ -45,7 +48,10 @@ def main(argv=None):
     envelope = {"protocol": 1, "command": None, "request_id": None, "ok": False}
     status = 0
     try:
-        args = parser.parse_args(argv)
+        arguments = sys.argv[1:] if argv is None else argv
+        args = parse_request(sys.stdin.buffer) if arguments == ["--request-json"] else parser.parse_args(arguments)
+        if getattr(args, "request_json", False):
+            raise CoreError("invalid-arguments", "--request-json must be used alone")
         envelope.update(command=args.command)
         if args.request_id is not None and len(args.request_id) > 128:
             raise CoreError("invalid-arguments", "request-id exceeds 128 characters")
@@ -61,12 +67,15 @@ def main(argv=None):
         elif args.command in {"build", "rebuild"}:
             options = {"overwrite": args.overwrite, "expected_sha256": args.expected_sha256}
             if args.command == "build":
-                result = build_document(bounded_read(args.svg, MAX_SVG), args.output,
+                source = getattr(args, "source", None)
+                result = build_document(source if source is not None else bounded_read(args.svg, MAX_SVG), args.output,
                                         args.width, args.height, **options)
             else:
                 result = rebuild_document(args.png, args.output, **options)
         else:
-            source = bounded_read(args.svg, MAX_SVG)
+            source = getattr(args, "source", None)
+            if source is None:
+                source = bounded_read(args.svg, MAX_SVG)
             result = validate_source(source) if args.syntax_only else validate_render(source, args.width, args.height)
         envelope.update(ok=True, result=result)
     except CoreError as exc:
