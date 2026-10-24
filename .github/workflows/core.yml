@@ -50,9 +50,8 @@ jobs:
         run: python -m pytest -q
       - name: Build wheel and source distribution
         run: python -m build packages/core --outdir dist
-      - name: Test TypeScript bridge and Python integration
-        working-directory: packages/bridge
-        run: node --test tests/bridge.test.mjs
+      - name: Test TypeScript bridge and real managed venv lifecycle
+        run: python tools/check_environment_manager.py dist
       - name: Test wheel outside source tree
         run: python tools/check_core_wheel.py dist
       - uses: actions/upload-artifact@v4

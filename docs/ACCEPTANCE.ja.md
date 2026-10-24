@@ -12,7 +12,7 @@
 | PNG構造／順序／CRC、decode raster、preview検証結果の分離 | 実験的Core subsetを検証済み。全container監査とeditor受入は未完了 |
 | Monaco強調／補完／検証／検索置換とVS Code undo／redo同期 | 未実装・未検証 |
 | 別名保存、revert、backup／hot exit、1024×1024透過新規文書 | 未実装・未検証 |
-| Python／native setup失敗、更新／取消、rollbackで元ファイルとdirty編集を保護 | 未実装・未検証 |
+| Python／native setup失敗、更新／取消、rollbackで元ファイルとdirty編集を保護 | 独立した専用venv APIで失敗・取消・切り戻し・原文保持を検証。拡張・native setup UIとdirty編集受け入れは残る |
 | 外部Codex／CLI更新とVS Code未保存編集の双方を保護し競合を通知 | 未実装・未検証 |
 | 3 OSでPython 3.11〜3.13のclean導入後、対応matrixを確定 | ローカルWindows Python 3.13 Core／clean wheelを検証。hosted 9組matrixを追加し、実runを確認する |
 | local Monaco／CSPを含むoffline package VSIXと独立pip wheel／sdist導入 | Core開発wheel／sdistとclean導入を検証。全6コマンド配布とVSIXは未完了 |
