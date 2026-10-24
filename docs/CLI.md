@@ -4,7 +4,7 @@
 
 ## Scope and installation
 
-The development package vector-png-editor-core 0.1.0.dev2 exposes vector-png-editor and python -m vector_png_editor. It implements inspect, extract, validate, build, verify and rebuild. The full writer/verification contract, backup policy and concurrency limitations are in [WRITING.md](WRITING.md); the VS Code editor and venv manager are not implemented. Python metadata admits 3.11–3.13 as candidates; executed support evidence is in [CORE_PROGRESS.md](CORE_PROGRESS.md). Native Cairo is separately required for rendering, with VECTOR_PNG_CAIRO_DIR on Windows and loader configuration appropriate to other platforms. No system Python is modified by the Core.
+The development package vector-png-editor-core 0.1.0.dev3 exposes vector-png-editor and python -m vector_png_editor. It implements inspect, extract, validate, build, verify and rebuild. The full writer/verification contract, backup policy and concurrency limitations are in [WRITING.md](WRITING.md); the VS Code editor and venv manager are not implemented. Python metadata admits 3.11–3.13 as candidates; executed support evidence is in [CORE_PROGRESS.md](CORE_PROGRESS.md). Native Cairo is separately required for rendering, with VECTOR_PNG_CAIRO_DIR on Windows and loader configuration appropriate to other platforms. No system Python is modified by the Core.
 
 ```text
 python -m pip install ./packages/core
@@ -30,7 +30,7 @@ inspect/extract can accept container-supported but unsafe SVG and differing-prev
 
 ## JSON and exit codes
 
-Operational success/error output is exactly one JSON object on stdout, using ASCII JSON escapes for portable console encoding. Help/version are human-readable exceptions. The CLI does not consume JSON on stdin; the future TypeScript request transport/cancellation/schema work remains P1-04. Optional global --request-id (before the command) is at most 128 characters and is echoed on parsed requests; invalid arguments may have command/request_id=null. Error messages are at most 2000 code points. No logs are mixed into operational stdout. Native/render failures use structured errors.
+Operational success/error output is exactly one JSON object on stdout, using ASCII JSON escapes for portable console encoding. Help/version are human-readable exceptions. The CLI accepts one bounded stdin JSON request with --request-json alone; the schema, inline-source transport, TypeScript adapter and cancellation limits are documented in [BRIDGE.md](BRIDGE.md). P1-04 remains partial. Optional global --request-id (before the command) is at most 128 characters and is echoed on parsed requests; invalid arguments may have command/request_id=null. Error messages are at most 2000 code points. No logs are mixed into operational stdout. Native/render failures use structured errors.
 
 ```json
 {"protocol":1,"command":"validate","request_id":"job1","ok":true,"result":{"xml":"valid","profile":"safe-svg-v1","profile_check":"passed","render":"not-checked","svg_bytes":42}}

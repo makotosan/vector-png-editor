@@ -4,7 +4,7 @@
 
 ## 範囲と導入
 
-開発package vector-png-editor-core 0.1.0.dev2はvector-png-editorとpython -m vector_png_editorを公開します。inspect、extract、validate、build、verify、rebuildを実装しています。書込・検証の完全な契約、バックアップ方針、競合制御の制限は[WRITING.ja.md](WRITING.ja.md)に記録し、VS Code editorとvenv managerは未実装です。Python metadataは3.11〜3.13を候補として許可し、実行した対応根拠は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録します。描画には別途native Cairoが必要で、WindowsではVECTOR_PNG_CAIRO_DIR、他platformでは導入に適したloader設定を使用します。Coreはsystem Pythonを変更しません。
+開発package vector-png-editor-core 0.1.0.dev3はvector-png-editorとpython -m vector_png_editorを公開します。inspect、extract、validate、build、verify、rebuildを実装しています。書込・検証の完全な契約、バックアップ方針、競合制御の制限は[WRITING.ja.md](WRITING.ja.md)に記録し、VS Code editorとvenv managerは未実装です。Python metadataは3.11〜3.13を候補として許可し、実行した対応根拠は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録します。描画には別途native Cairoが必要で、WindowsではVECTOR_PNG_CAIRO_DIR、他platformでは導入に適したloader設定を使用します。Coreはsystem Pythonを変更しません。
 
 ```text
 python -m pip install ./packages/core
@@ -30,7 +30,7 @@ inspect／extractはコンテナーとして対応した危険SVGや異なるpre
 
 ## JSONと終了コード
 
-操作の成功・error出力はstdoutのJSON object 1個だけで、console encoding互換のためASCII JSON escapeを使用します。help／versionは人間向け出力の例外です。CLIはstdinのJSONを受け取らず、将来のTypeScript要求transport／取消／schemaはP1-04に残ります。任意のglobal --request-id（コマンド前）は最大128文字で、解析済み要求にechoします。不正引数ではcommand／request_id=nullの場合があります。error messageは最大2000 code pointsです。操作stdoutにlogを混ぜず、native／描画失敗を構造化errorにします。
+操作の成功・error出力はstdoutのJSON object 1個だけで、console encoding互換のためASCII JSON escapeを使用します。help／versionは人間向け出力の例外です。CLIは--request-json単独でstdinの上限付きJSON要求1個を受け取ります。schema、inline原文通信、TypeScriptアダプター、取消の制限は[BRIDGE.ja.md](BRIDGE.ja.md)に記録します。P1-04は一部実装です。任意のglobal --request-id（コマンド前）は最大128文字で、解析済み要求にechoします。不正引数ではcommand／request_id=nullの場合があります。error messageは最大2000 code pointsです。操作stdoutにlogを混ぜず、native／描画失敗を構造化errorにします。
 
 ```json
 {"protocol":1,"command":"validate","request_id":"job1","ok":true,"result":{"xml":"valid","profile":"safe-svg-v1","profile_check":"passed","render":"not-checked","svg_bytes":42}}

@@ -1,5 +1,6 @@
 """Install the built wheel without source imports and exercise packaged worker/CLI."""
 import json
+import base64
 import os
 from pathlib import Path
 import subprocess
@@ -36,4 +37,12 @@ with tempfile.TemporaryDirectory(prefix='vector-png-wheel-') as directory:
                              capture_output=True, check=True)
         assert json.loads(run.stdout)['ok'], run.stdout
     assert extracted.read_bytes() == source.read_bytes()
+    request = {'protocol': 1, 'command': 'validate', 'request_id': 'installed-wheel',
+               'source_base64': base64.b64encode(source.read_bytes()).decode(), 'width': 2, 'height': 2}
+    run = subprocess.run([str(executable), '--request-json'], input=json.dumps(request).encode(),
+                         cwd=root, env=env, capture_output=True, check=True)
+    assert json.loads(run.stdout)['request_id'] == 'installed-wheel', run.stdout
+    run = subprocess.run([str(python), '-m', 'vector_png_editor.environment'], cwd=root, env=env,
+                         capture_output=True, check=True)
+    assert json.loads(run.stdout)['report']['healthy'], run.stdout
     print('Clean wheel installation and packaged rendering worker passed outside source tree.')
