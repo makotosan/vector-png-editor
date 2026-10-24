@@ -4,7 +4,7 @@
 
 ## Scope and installation
 
-The development package vector-png-editor-core 0.1.0.dev3 exposes vector-png-editor and python -m vector_png_editor. It implements inspect, extract, validate, build, verify and rebuild. The full writer/verification contract, backup policy and concurrency limitations are in [WRITING.md](WRITING.md); the VS Code editor and venv manager are not implemented. Python metadata admits 3.11–3.13 as candidates; executed support evidence is in [CORE_PROGRESS.md](CORE_PROGRESS.md). Native Cairo is separately required for rendering, with VECTOR_PNG_CAIRO_DIR on Windows and loader configuration appropriate to other platforms. No system Python is modified by the Core.
+The development package vector-png-editor-core 0.1.0.dev3 exposes vector-png-editor and python -m vector_png_editor. It implements inspect, extract, validate, build, verify and rebuild. The full writer/verification contract, backup policy and concurrency limitations are in [WRITING.md](WRITING.md); the VS Code editor and integrated venv setup UI are not implemented. A separate managed-venv API is documented in [INSTALL.md](INSTALL.md). Python metadata admits 3.11–3.13 as candidates; executed support evidence is in [CORE_PROGRESS.md](CORE_PROGRESS.md). Native Cairo is separately required for rendering, with VECTOR_PNG_CAIRO_DIR on Windows and loader configuration appropriate to other platforms. No system Python is modified by the Core.
 
 ```text
 python -m pip install ./packages/core

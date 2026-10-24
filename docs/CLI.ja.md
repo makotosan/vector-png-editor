@@ -4,7 +4,7 @@
 
 ## 範囲と導入
 
-開発package vector-png-editor-core 0.1.0.dev3はvector-png-editorとpython -m vector_png_editorを公開します。inspect、extract、validate、build、verify、rebuildを実装しています。書込・検証の完全な契約、バックアップ方針、競合制御の制限は[WRITING.ja.md](WRITING.ja.md)に記録し、VS Code editorとvenv managerは未実装です。Python metadataは3.11〜3.13を候補として許可し、実行した対応根拠は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録します。描画には別途native Cairoが必要で、WindowsではVECTOR_PNG_CAIRO_DIR、他platformでは導入に適したloader設定を使用します。Coreはsystem Pythonを変更しません。
+開発package vector-png-editor-core 0.1.0.dev3はvector-png-editorとpython -m vector_png_editorを公開します。inspect、extract、validate、build、verify、rebuildを実装しています。書込・検証の完全な契約、バックアップ方針、競合制御の制限は[WRITING.ja.md](WRITING.ja.md)に記録し、VS Code editorと統合venv setup UIは未実装です。別の専用venv APIは[INSTALL.ja.md](INSTALL.ja.md)に記録します。Python metadataは3.11〜3.13を候補として許可し、実行した対応根拠は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録します。描画には別途native Cairoが必要で、WindowsではVECTOR_PNG_CAIRO_DIR、他platformでは導入に適したloader設定を使用します。Coreはsystem Pythonを変更しません。
 
 ```text
 python -m pip install ./packages/core

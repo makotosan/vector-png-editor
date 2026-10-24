@@ -41,3 +41,7 @@ Core 0.1.0.dev2はbuild／verify／rebuild、原文保持生成、厳密なロ�
 ## JSON bridge追加
 
 Core 0.1.0.dev3は全6コマンド向けの厳密な上限付きprotocol-1 stdin要求、正確なinline原文バイト、出力上限・期限・読み取り専用取消・世代による古いプレビュー結果拒否を備えたTypeScriptアダプター、読み取り専用のPython・直接依存・実描画環境診断を追加します。完全な要求schemaと境界は[BRIDGE.ja.md](BRIDGE.ja.md)を参照してください。Windows／Python 3.13.5のローカルPythonテスト116件が45.48秒で合格し、実際のPython呼び出しを含むNode 24 bridgeテスト15件が合格しました。wheel／sdistを作成しました。導入smokeとhosted CI根拠は実行後に今回のPRへ記録します。P1-04は一部実装で、native・推移的依存固定、穏当なrenderer取消・出力上限、管理venv更新・切り戻し、拡張host受け入れは残ります。これらのテストは任意ライターとの競合制御や形式完全準拠を証明しません。README、CLI、互換性、進捗、bridgeの日英ペアを節ごとに照合し、例、表、参照先、上限、状態、取消・失敗時保証を含む全文の意味の一致を確認しました。上記の書込・初期基準の結果は過去の根拠であり、PR #24はマージ済みです。
+
+## 専用Python環境管理の追加
+
+TypeScript管理処理で独立venvを作成し、信頼済みwheel／lock digestとPython範囲を検査し、requirements.lockのアプリ依存9個を固定導入し、venv identity・package閉包・依存・実描画を検証して、active／previous pointerをatomicに切り替えます。旧環境と失敗環境を保持し、健全性を条件に切り戻します。runManagedCoreはPython／pip変数を除去したready interpreterを選びます。offline／network選択、API契約、復旧の制限は[INSTALL.ja.md](INSTALL.ja.md)を参照してください。ローカルWindowsでNodeテスト全28件がskipなしで115.63秒で合格しました。実際の専用venv統合、offline導入失敗、不正・不健全wheel、取消、並行setup、周囲の不正な変数、切り戻し、active pointer・原文の正確な保持を含みます。Core wheelは0.1.0.dev3でCore原文は変更せず、先のPython 116件は過去の基準根拠です。今回追加分のhosted CIは未完了で、OS／Python全9組でそれらのCoreテストと実際の管理テストも実行します。P1-04／P2-07は一部実装で、interpreter自動検出・native setup UI、release manifest、成果物・native hash、完全なrenderer resource・取消制御、VS Code連携、実機受け入れは残ります。README、bridge、導入、受け入れ、進捗の日英ペア全文について、節の意味、識別子、版、上限、例外条件、参照先、失敗・有効化の境界を照合しました。PR #25はマージ済みです。

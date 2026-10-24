@@ -1,0 +1,39 @@
+# 実験的な専用Python環境管理
+
+[English](INSTALL.md)
+
+## 範囲と前提条件
+
+packages/bridge/src/environment.tsは、将来の拡張host向けにprepareEnvironment、activeEnvironment、runManagedCore、rollbackEnvironmentを提供します。テストしたTypeScript setup APIであり、導入可能なVS Code拡張や利用者向けsetup画面ではありません。Python自動検出、native Cairo導入、VSIXへの同梱、拡張hostテスト、release manifestは残課題です。P1-04／P2-07は一部実装で、製品全体・安定版は未完成です。
+
+信頼済みの絶対Python実行パス、Python 3.11〜3.13、そのinterpreter用に設定したnative Cairo、信頼済みvector-png-editor-coreのpure-Python wheel、このリポジトリーの[requirements.lock](../requirements.lock)を使います。wheelとlockの両方に、信頼済み呼び出し側設定から与える小文字SHA-256期待値が必要です。任意のdownload自体から計算したdigestは、その出所を認証しません。runtimeテストはNode 24内蔵のTypeScript型除去を使い、静的型検査・buildやVS CodeのNode互換性は主張しません。このAPIは同梱Python・native library・fontを導入しません。
+
+lockは管理処理でテストするアプリruntime依存9個を固定します。Pillow 13.0.0、CairoSVG 2.9.1、defusedxml 0.7.1、cairocffi 1.7.1、cffi 2.1.1、cssselect2 0.10.1、tinycss2 1.5.1、pycparser 3.12、webencodings 0.6.1です。依存wheelのhash lockではなくversion lockです。Python、native Cairo、font、bootstrap pip／setuptoolsは対象外です。導入Core版は選択wheel版と厳密に一致する必要があります。Coreの通常pip導入は直接依存固定のままで、この別管理用lockは自動適用しません。lock変更はレビューとOS／Pythonテストを伴う明示的なものとし、上流へ自動追従しません。
+
+## 環境の準備と使用
+
+APIはroot（アプリ所有の絶対パスのprivate保存先）、python（絶対実行パス）、wheel、wheelSha256、version、requirements、requirementsSha256と、任意のallowNetwork、wheelhouse、env、signal、onProgressを受け取ります。versionは現在major.minor.patchと任意の.devNに対応し、Core成果物はpure-Python wheel名で導入します。既定のsetupはofflineで、任意のローカルwheelhouseからwheelを供給できます。allowNetwork=trueはpipの既定indexを明示的に有効にします。独自index・認証設定や周囲のpip設定の継承はありません。
+
+prepareEnvironmentは正規化した保存先でsetup.lockを排他作成し、現在の状態を読み、wheelとlockを上限付きで取得・snapshot・検証し、Python範囲を検査して、最終パスenvs/UUIDに新しいvenvを作ります。entry pointのパスが絶対値になり得るため、構築したvenvを改名しません。旧環境をその場で更新しません。snapshot上限はwheel 50,000,000 bytes、lock 65,536 bytes、状態・ready manifest各16,384 bytesです。lock行は重複しない厳密なname==versionとコメントだけを許可し、pip option、URL、範囲指定、installer／Core項目を禁止します。
+
+Pythonコマンドは-Iと明示UTF-8 mode、固定引数一覧、shell=false、非表示Windowsウィンドウを使います。周囲のPYTHON*、PIP_*、VIRTUAL_ENV、__PYVENV_LAUNCHER__を除き、PIP_CONFIG_FILEをnull deviceへ向けてpip設定の読み込みを無効化します。VECTOR_PNG_CAIRO_DIRを含む必要なnative library環境設定は保持します。venv作成後、interpreterはprefixが新規構築directoryと一致し、base prefixと異なることを証明する必要があります。pipは必ずそのinterpreterから、明示的な構築先prefix、binary wheel限定、アプリ保存先のdownload-cacheで実行します。system Pythonへ導入・更新しません。binary依存を取得できない場合はsetup失敗とし、source buildへfallbackしません。
+
+有効化前に、導入済みアプリ版すべてをsnapshot lockと照合し、想定外のアプリpackageを拒否し、pip checkを実行し、Core／Python版一致と実際の2×2 CairoSVG環境診断成功を要求します。bootstrap pip／setuptoolsだけはアプリ版固定から除外します。fsyncしたready.jsonに不変の環境ID、Core／Python版、wheel／lock digestを記録します。進捗callbackはpython、venv、venv-identity、install、packages、dependencies、render-health、activateの各段階を報告します。callbackコードは無関係な副作用を起こしてはいけません。
+
+activeEnvironmentは選択entryとinterpreterを返し、空の保存先ではnullを返します。不正な状態・manifestは安全側に失敗します。runManagedCoreは検証済みready entryを選び、周囲のPython／pipの転送設定を除き、アプリ保存先から既存の構造化Core bridgeを呼びます。文書directoryからCoreコードをimportしません。その要求には環境を固定し、後から更新されても旧環境を保持するため無効化されません。[BRIDGE.ja.md](BRIDGE.ja.md)の通常のCore timeout・出力・取消の境界を適用します。
+
+## 有効化と切り戻し
+
+唯一の選択pointerはactive.jsonで、protocol=1、active、previous entryを持ちます。開始時pointerと取消を再確認し、完全な置換pointerをfsyncし、取消をもう一度検査してatomic公開します。初回作成は上書きしないhard link、更新はrenameを使います。初回有効化にはhard link対応が必要で、安全でないcopyへのfallbackはありません。この公開境界前に失敗したsetupは旧pointerのbyteを変更しません。SVG／PNG文書やエディターの未保存bufferはsetup APIの入力ではなく、書き込みません。
+
+rollbackEnvironmentは記録済みpreviousのmanifest／lock snapshotを検証し、導入package・依存・実描画の健全性を再検査してからactive／previousをatomicに入れ替えます。previousが欠落・不健全な場合はactive選択を置換できません。両環境をdiskに残し、切り戻しの再試行や再切替は切替先が健全な間だけ可能です。自動fallback、その場での修復、削除は行いません。
+
+setup lockは同じアプリ保存先の協調processを直列化し、並行setupはbusyで失敗します。有効化前の取消は選択環境を保持し、process終了はbridgeと同じbest effortです。atomic確定境界後の取消やI/O・cleanup失敗では、有効化が行われなかったと保証できません。呼び出し側はactiveEnvironmentを再読して確定選択を判断する必要があります。directory更新をまたぐ厳密なcrash耐久性、危険directoryへの防御、非協調保存先ライターとのcompare-and-swap、古いlockの自動復旧、native sandboxは主張しません。保存先にはアプリ管理dataだけを置き、文書や共有の変更可能なproject folderには使わないでください。
+
+## 失敗、復旧と検証根拠
+
+EnvironmentErrorはcode、stage、最大2000 UTF-16 code unitsのmessageを公開します。Python不在・未対応、digest／lock不正、不正wheel、offline・導入失敗、package版不一致、依存・native描画失敗、timeout、取消、並行setupはすべて確定前の有効化を防ぎます。コマンドstdout／stderr上限は262,144／65,536 bytesです。コマンド別期限はPython検出・venv identityが15秒、venv作成120秒、pip導入300秒、package一覧・依存・描画健全性が各30秒です。setup全体の単一期限や厳密native memory quotaはありません。
+
+失敗candidate環境、setup snapshot、cache、完成した旧環境は調査用に残します。使用中interpreterを削除する自動garbage collectionはありません。処理可能な失敗ではsetup.lockを解放しますが、強制終了で古いlockや一時pointer fileが残る可能性があります。setup processが動いていないことを確認してから、アプリ所有の残存物を手動復旧します。setup失敗だけを理由に選択・previous環境を削除してはいけません。native Cairoは別途設定し、native／描画失敗を解消してからcandidateを選択します。
+
+統合テストでは、空白と日本語を含むパスで実際の専用環境を構築し、実描画を検査し、周囲のPython変数を不正にしたCore呼び出し、並行setup、offline・不正wheel・不健全wheel・取消candidateでのactive.json保持、独立構築した2環境の切替、切り戻し、原文保持を検証します。単体・障害テストは版範囲方針、Python不在、digest／lock失敗、path traversal、古いlock、切り戻し先欠落・未準備、process取消・timeoutを対象とします。成功する2環境は同じCore版を含む場合があり、環境置換と切り戻しの検査であって、公開版間の移行検査ではありません。[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)と今回のPRに実行結果を記録します。OS／Python全9組のCIでも既存Core・bridge・package検査とともに、作成wheelに対する実際の管理テストを実行します。hostedテストであり、実機VS Code受け入れではありません。

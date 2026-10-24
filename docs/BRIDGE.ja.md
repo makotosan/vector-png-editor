@@ -4,7 +4,7 @@
 
 ## 実装範囲
 
-Core 0.1.0.dev3は既存6コマンド向けの上限付きstdin要求、独立した読み取り専用環境診断、packages/bridgeのTypeScript subprocessアダプターを追加します。P1-04は一部実装です。VS Code拡張、Webview通信、管理venv、更新・切り戻し管理、完全な推移的依存・native固定、リリースはありません。保存形式、仕様固定、[WRITING.ja.md](WRITING.ja.md)の書き込み競合制御の境界は変更しません。PR #24はマージ済みですが、元のCI結果は過去の根拠であり、このbridgeの証明ではありません。
+Core 0.1.0.dev3は既存6コマンド向けの上限付きstdin要求、独立した読み取り専用環境診断、packages/bridgeのTypeScript subprocessアダプターを追加します。P1-04は一部実装です。別の[専用環境管理API](INSTALL.ja.md)で、Pythonアプリ依存のversion lockを使う専用venv構築・健全性検査・有効化・切り戻しを追加しました。VS Code／Webview連携、完全なnative・成果物固定、リリースは残ります。保存形式、仕様固定、[WRITING.ja.md](WRITING.ja.md)の書き込み競合制御の境界は変更しません。PR #24はマージ済みですが、元のCI結果は過去の根拠であり、このbridgeの証明ではありません。
 
 ## 1要求と1結果
 
@@ -34,6 +34,6 @@ LatestValidationは文書ごとに保持します。新しいvalidate要求ご�
 python -m vector_png_editor.environment
 ```
 
-診断はprotocol=1、kind=environment、reportを持つJSON objectを1個出力します。Core／Python／platformの版、Pythonが3.11〜3.13に入るか、Pillow 13.0.0・CairoSVG 2.9.1・defusedxml 0.7.1のexpected／actual／match、実際の2×2描画結果または上限付きエラーを返します。Python範囲、直接依存固定、描画がすべて合格した場合だけ0、それ以外は1で終了します。site packageの欠落やnative描画失敗を、ファイル変更・導入なしで報告します。公開API importを遅延させ、この診断が任意のruntime import欠落時にも起動できるようにします。この別診断の外枠は要求IDを持たず、7番目の編集コマンドやrunCore応答ではありません。native_lockとenvironment_managerはnot-implementedと明示します。native・推移的依存の完全な再現性、font同等性、導入rollbackは証明しません。
+診断はprotocol=1、kind=environment、reportを持つJSON objectを1個出力します。Core／Python／platformの版、Pythonが3.11〜3.13に入るか、Pillow 13.0.0・CairoSVG 2.9.1・defusedxml 0.7.1のexpected／actual／match、実際の2×2描画結果または上限付きエラーを返します。Python範囲、直接依存固定、描画がすべて合格した場合だけ0、それ以外は1で終了します。site packageの欠落やnative描画失敗を、ファイル変更・導入なしで報告します。公開API importを遅延させ、この診断が任意のruntime import欠落時にも起動できるようにします。この別診断の外枠は要求IDを持たず、7番目の編集コマンドやrunCore応答ではありません。standalone Core内のnative_lockとenvironment_managerはnot-implementedと明示します。別のTypeScript管理処理は[INSTALL.ja.md](INSTALL.ja.md)に記録します。native・推移的依存の完全な再現性、font同等性、導入rollbackは証明しません。
 
 テストは厳密・過大要求、重複key、非有限・深いJSON、不正Unicode／base64、6コマンドJSON原文往復、結果schema検証、依存欠落・不一致とnativeエラー、不正・過大subprocess応答、ID不一致、取消・期限、古い検証、実際のTypeScriptからPythonへの呼び出しを対象とします。clean wheelのsmokeにはソースツリー外でのJSON要求と環境診断を含めます。CoreのOS／Python全9組のCIでもNode 24のbridgeテストを実行します。実行済み根拠は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)を参照してください。単体・障害テストだけでP1-04／P2の環境復旧やエディターhost受け入れは完了しません。

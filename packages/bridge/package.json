@@ -1,8 +1,8 @@
 {
   "name": "vector-png-editor-bridge",
-  "version": "0.1.0-dev3",
+  "version": "0.1.0-dev4",
   "private": true,
   "type": "module",
   "engines": {"node": ">=24"},
-  "scripts": {"test": "node --test tests/bridge.test.mjs"}
+  "scripts": {"test": "node --test tests/*.test.mjs"}
 }

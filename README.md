@@ -4,6 +4,7 @@
 
 VS Code Extension + Python Core + independent pip CLI for editing SVG embedded in PNG. SVG is authoritative; PNG raster is derived. Status: experimental Phase 1 Core with inspect/extract/validate/build/verify/rebuild; the VS Code editor and stable release are not implemented.
 
+- [Managed Python setup and rollback](docs/INSTALL.md)
 - [JSON bridge and environment diagnosis](docs/BRIDGE.md)
 - [Writing and conflict boundaries](docs/WRITING.md)
 - [Current Core progress and evidence](docs/CORE_PROGRESS.md)
