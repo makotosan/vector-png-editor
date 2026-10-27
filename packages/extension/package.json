@@ -64,6 +64,16 @@
           "command": "vectorPng.newDocument"
         }
       ]
+    },
+    "configuration": {
+      "title": "Vector PNG Editor",
+      "properties": {
+        "vectorPng.corePythonPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to a Python 3.11-3.13 executable with the vector-png-editor Core installed. Used to validate and render edited previews (P2-03). Leave empty until the managed environment integration lands; edited previews are then unavailable and the saved PNG preview keeps working."
+        }
+      }
     }
   },
   "dependencies": {
