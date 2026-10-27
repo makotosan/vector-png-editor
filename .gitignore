@@ -7,3 +7,6 @@ build/
 *.egg-info/
 *.vsix
 
+
+# VS Code extension build output
+packages/extension/out/
