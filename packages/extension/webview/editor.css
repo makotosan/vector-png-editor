@@ -5,3 +5,6 @@ body { display: flex; flex-direction: column; font-family: sans-serif; }
 #preview-pane { flex: 0 0 40%; overflow: auto; padding: 8px; }
 #preview-pane img { max-width: 100%; }
 #editor { flex: 1; min-width: 0; }
+#preview-toggle { margin-bottom: 6px; }
+#preview-toggle button[aria-pressed="true"] { font-weight: bold; }
+#preview-status { min-height: 1em; margin-bottom: 6px; }
