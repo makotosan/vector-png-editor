@@ -4,6 +4,18 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
+## P2-03: debounced previews and manual toggle
+
+Edited previews render only through the Python Core: after 300 ms idle
+the host validates the edited source via the bridge `LatestValidation`
+lane and, only on success, renders it with the Core `build` command
+into a private preview file. Stale results are discarded by generation,
+so the latest source wins. The preview pane opens on the actual saved
+raster and switches to the edited preview only when the user clicks the
+toggle - never automatically. Set `vectorPng.corePythonPath` to a Python
+3.11-3.13 with the Core installed; without it, edited previews report
+unavailable and the saved preview keeps working.
+
 ## P2-02: secure Webview and Monaco
 
 The webview loads Monaco only from packaged local assets. Run
