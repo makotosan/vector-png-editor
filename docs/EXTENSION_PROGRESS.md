@@ -35,3 +35,31 @@ replace the read-only provider without changing the view type, commands or
 routing. VSIX compilation and bundling are P3-04 scope. P2-01 therefore
 remains open until extension-host evidence exists; this document does not
 close it.
+
+## Webview and Monaco follow-up — P2-02
+
+The editor webview now loads Monaco 0.57.0 only from packaged local assets
+(`media/monaco`, copied from the pinned npm package by
+`scripts/copy-monaco.mjs`; the generated bundle is not committed). The page
+shell is produced by `src/webviewHtml.ts` and contains no user content: the
+SVG source arrives by message and lives in a Monaco text model, never in
+the DOM. The CSP sets `default-src 'none'` and `connect-src 'none'`, limits
+scripts to a nonce plus packaged resources, and lets workers run only from
+packaged resources or blobs, so the packaged editor works offline and the
+source cannot trigger network access.
+
+Webview messages are validated by `src/messages.ts` (known types only,
+bounded source size, integer revisions). Source extraction for editing is
+in `src/extract.ts`: bounded decompression that preserves exact bytes,
+including BOM and newline style. Completion and advisory diagnostics use
+the safe-svg-v1 allowlists in `src/profile.ts`; a unit test parses the
+Python Core's `_backend.py` and fails if the lists drift. Diagnostics are
+advisory only - the Core validator remains authoritative.
+
+Local verification: 34 extension unit tests passed (the 15 from P2-01 plus
+extraction, message validation, profile parity, hostile-source diagnostics
+and CSP/asset checks) and the TypeScript type check passed. Extension-host
+and packaged-VSIX offline tests have not run yet; they remain part of the
+P3 acceptance work, so P2-02 stays open until that evidence exists. The
+editor model accepts edits and updates diagnostics, but persistence is
+still not wired: preview rendering is P2-03 and saving is P2-04.
