@@ -4,6 +4,19 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
+## P2-02: secure Webview and Monaco
+
+The webview loads Monaco only from packaged local assets. Run
+`npm run bundle:monaco` (also wired as `vscode:prepublish`) to copy the
+pinned `monaco-editor` package into `media/monaco/`; that directory is
+generated and not committed. The page shell carries a restrictive CSP
+(`default-src 'none'`, `connect-src 'none'`, nonce-bound scripts, packaged
+workers), contains no user content, and receives the SVG source by
+message into a Monaco model. Completion and advisory diagnostics follow
+the safe-svg-v1 allowlists in `src/profile.ts`, which a unit test checks
+against the Python Core. Messages from the webview are schema-checked
+and bounded in `src/messages.ts`.
+
 ## P2-01 scope: registration and open routing
 
 - Registers the custom editor view type `vectorPng.editor` for `*.png` with
@@ -24,12 +37,13 @@ SVG source in a single compressed `iTXt` chunk with the keyword
   with no VS Code dependency, following the bridge package's convention of
   running TypeScript directly under Node's test runner.
 
-The registered editor is read-only in this phase: it displays the saved PNG
-raster with scripts disabled and a restrictive CSP, and never inserts SVG
-into the DOM. Monaco source editing (P2-02), previews (P2-03) and the
-editable save lifecycle (P2-04) replace the read-only provider without
-changing the view type or commands. Compilation/bundling for VSIX
-distribution is P3-04 scope; `npm run check` type-checks the sources.
+The provider remains read-only at the VS Code level: the webview shows
+the saved PNG raster next to the Monaco source model, edits update
+advisory diagnostics in memory, and nothing is written back yet.
+Previews (P2-03) and the editable save lifecycle (P2-04) replace the
+read-only provider without changing the view type or commands.
+Compilation/bundling for VSIX distribution is P3-04 scope; `npm run check`
+type-checks the sources.
 
 ## Tests
 
