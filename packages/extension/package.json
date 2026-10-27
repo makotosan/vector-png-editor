@@ -1,0 +1,67 @@
+{
+  "name": "vector-png-editor",
+  "displayName": "Vector PNG Editor",
+  "description": "Edit PNG files with an embedded safe-svg-v1 SVG source.",
+  "version": "0.1.0-dev0",
+  "private": true,
+  "publisher": "makotosan",
+  "engines": {
+    "vscode": "^1.90.0",
+    "node": ">=24"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "scripts": {
+    "check": "tsc -p .",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/vscode": "1.90.0",
+    "typescript": "5.9.3"
+  },
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "vectorPng.editor",
+        "displayName": "Vector PNG Editor",
+        "selector": [
+          {
+            "filenamePattern": "*.png"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "commands": [
+      {
+        "command": "vectorPng.openInEditor",
+        "title": "Vector PNG: Open in Editor"
+      },
+      {
+        "command": "vectorPng.newDocument",
+        "title": "Vector PNG: New Document"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "vectorPng.openInEditor",
+          "when": "resourceExtname == .png",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "vectorPng.openInEditor"
+        },
+        {
+          "command": "vectorPng.newDocument"
+        }
+      ]
+    }
+  }
+}
