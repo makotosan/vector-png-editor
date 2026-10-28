@@ -50,13 +50,140 @@ function refreshPreview() {
 document.getElementById('show-saved').addEventListener('click', () => {
   previewState.showSaved();
   vscode.postMessage({ type: 'setPreviewMode', mode: 'saved' });
+  persistPanelState();
   refreshPreview();
 });
 document.getElementById('show-edited').addEventListener('click', () => {
   previewState.showEdited();
   vscode.postMessage({ type: 'setPreviewMode', mode: 'edited' });
+  persistPanelState();
   refreshPreview();
 });
+
+// --- Code toolbar and Preview panel (Issue #45) ---
+// Panel choices persist per panel in the webview state: the preview
+// mode and the background survive a hide/reveal of the panel. The
+// FILL value is not panel state - it always mirrors the source and
+// arrives from the host.
+const persistedPanel = vscode.getState() ?? {};
+if (persistedPanel.previewMode === 'edited') previewState.showEdited();
+previewState.setBackgroundPreset(typeof persistedPanel.backgroundPreset === 'string' ? persistedPanel.backgroundPreset : 'checkerboard');
+if (typeof persistedPanel.customColor === 'string') previewState.setBackgroundCustom(persistedPanel.customColor);
+if (previewState.mode !== 'saved') vscode.postMessage({ type: 'setPreviewMode', mode: previewState.mode });
+function persistPanelState() {
+  vscode.setState({
+    previewMode: previewState.mode,
+    backgroundPreset: previewState.backgroundPreset,
+    customColor: previewState.customColor,
+  });
+}
+
+function refreshBackground() {
+  const area = document.getElementById('preview-area');
+  const value = previewState.backgroundValue();
+  area.classList.toggle('checkerboard', value === 'checkerboard');
+  area.style.backgroundColor = value === 'checkerboard' ? '' : value;
+  for (const preset of ['checkerboard', 'white', 'black']) {
+    document.getElementById('bg-' + preset).setAttribute('aria-pressed',
+      String(previewState.customColor === null && previewState.backgroundPreset === preset));
+  }
+  document.getElementById('background-swatch').value =
+    previewState.customColor ?? (previewState.backgroundPreset === 'black' ? '#000000' : '#ffffff');
+}
+for (const preset of ['checkerboard', 'white', 'black']) {
+  document.getElementById('bg-' + preset).addEventListener('click', () => {
+    previewState.setBackgroundPreset(preset);
+    const text = document.getElementById('background-text');
+    text.value = '';
+    text.removeAttribute('aria-invalid');
+    refreshBackground();
+    persistPanelState();
+  });
+}
+const backgroundText = document.getElementById('background-text');
+document.getElementById('background-swatch').addEventListener('input', (event) => {
+  previewState.setBackgroundCustom(event.target.value);
+  backgroundText.value = previewState.customColor ?? '';
+  backgroundText.removeAttribute('aria-invalid');
+  refreshBackground();
+  persistPanelState();
+});
+backgroundText.addEventListener('input', () => backgroundText.removeAttribute('aria-invalid'));
+backgroundText.addEventListener('change', () => {
+  const raw = backgroundText.value.trim();
+  if (raw === '') {
+    // Clearing the field clears the custom colour, back to the
+    // checkerboard preset.
+    previewState.setBackgroundPreset('checkerboard');
+    backgroundText.removeAttribute('aria-invalid');
+  } else {
+    const normalized = window.VpePreviewState.normalizeHexColor(raw);
+    if (!normalized) {
+      // Rejected: restore the last valid value and mark the field
+      // invalid; the background itself never changes on bad input.
+      backgroundText.value = previewState.customColor ?? '';
+      backgroundText.setAttribute('aria-invalid', 'true');
+      return;
+    }
+    previewState.setBackgroundCustom(normalized);
+    backgroundText.value = normalized;
+    backgroundText.removeAttribute('aria-invalid');
+  }
+  refreshBackground();
+  persistPanelState();
+});
+
+// FILL row: mirrors the root element's fill attribute. Nothing is
+// applied while typing or picking - only Enter / Apply posts the
+// value, and the host turns it into one ordinary document edit.
+// While the field is focused or dirty, host refreshes (typing in
+// Monaco, undo, sync) are deferred and land on blur, so an edit in
+// progress is never overwritten mid-keystroke.
+let fillFieldDirty = false;
+let deferredFill = null;
+function showRootFill(value) {
+  const text = document.getElementById('fill-text');
+  text.value = value;
+  const hex = window.VpePreviewState.normalizeHexColor(value);
+  if (hex) document.getElementById('fill-swatch').value = hex;
+}
+function refreshRootFill(available, value) {
+  const row = document.getElementById('fill-row');
+  for (const id of ['fill-swatch', 'fill-text', 'fill-apply'])
+    document.getElementById(id).disabled = !available;
+  row.title = available ? '' : 'The root <svg> element could not be located in the source, so its fill cannot be edited here.';
+  if (!available) return;
+  if (fillFieldDirty || document.activeElement === document.getElementById('fill-text')) {
+    deferredFill = value;
+    return;
+  }
+  showRootFill(value);
+}
+const fillText = document.getElementById('fill-text');
+fillText.addEventListener('input', () => { fillFieldDirty = true; });
+fillText.addEventListener('blur', () => {
+  fillFieldDirty = false;
+  if (deferredFill !== null) { showRootFill(deferredFill); deferredFill = null; }
+});
+document.getElementById('fill-swatch').addEventListener('input', (event) => {
+  // Picking a colour only fills the field; Apply still decides.
+  fillText.value = event.target.value;
+  fillFieldDirty = true;
+});
+function applyRootFill() {
+  vscode.postMessage({ type: 'applyRootFill', value: fillText.value });
+  fillFieldDirty = false;
+  deferredFill = null;
+}
+document.getElementById('fill-apply').addEventListener('click', applyRootFill);
+fillText.addEventListener('keydown', (event) => { if (event.key === 'Enter') applyRootFill(); });
+
+document.getElementById('tool-save').addEventListener('click', () => vscode.postMessage({ type: 'saveDocument' }));
+document.getElementById('tool-format').addEventListener('click', () => vscode.postMessage({ type: 'formatSource' }));
+document.getElementById('action-copy').addEventListener('click', () => vscode.postMessage({ type: 'copySource' }));
+document.getElementById('action-export').addEventListener('click', () => vscode.postMessage({ type: 'exportSource' }));
+document.getElementById('action-export-png').addEventListener('click', () => vscode.postMessage({ type: 'exportPng' }));
+refreshBackground();
 let revision = 0;
 let applyingHostUpdate = false;
 
@@ -114,12 +241,16 @@ window.addEventListener('message', (event) => {
     };
     savedUri = message.previewUri;
     refreshPreview();
+    refreshBackground();
+    if (message.rootFill) refreshRootFill(message.rootFill.available === true, typeof message.rootFill.value === 'string' ? message.rootFill.value : '');
     document.getElementById('meta').textContent = message.meta;
     if (editor && editor.getValue() !== message.source) {
       applyingHostUpdate = true;
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+  } else if (message.type === 'rootFill') {
+    refreshRootFill(message.available === true, typeof message.value === 'string' ? message.value : '');
   } else if (message.type === 'notice') {
     document.getElementById('meta').textContent = message.text;
   } else if (message.type === 'saved') {

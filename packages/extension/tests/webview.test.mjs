@@ -46,3 +46,45 @@ test('webview script uses no CDN, no innerHTML, and posts only protocol messages
   assert.ok(js.includes("postMessage({ type: 'ready' })") || js.includes('type: \'sourceChanged\''));
   assert.match(js, /MonacoEnvironment/);
 });
+
+test('editor HTML (Issue #45) has the code toolbar and the Preview panel structure', () => {
+  const html = buildEditorHtml(assets);
+  for (const id of ['code-pane', 'code-toolbar', 'tool-save', 'tool-format', 'editor',
+    'preview-pane', 'preview-header', 'preview-title', 'bg-presets',
+    'bg-checkerboard', 'bg-white', 'bg-black',
+    'fill-row', 'fill-swatch', 'fill-text', 'fill-apply',
+    'background-row', 'background-swatch', 'background-text',
+    'preview-toggle', 'show-saved', 'show-edited', 'preview-status',
+    'preview-area', 'preview', 'preview-actions', 'action-copy', 'action-export', 'action-export-png'])
+    assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
+  assert.match(html, /id="tool-save" type="button">Save</);
+  assert.match(html, /id="tool-format" type="button">Format</);
+  assert.match(html, /id="preview-title">Preview</);
+  assert.match(html, />FILL</);
+  assert.match(html, />BACKGROUND</);
+  assert.match(html, /id="fill-swatch" type="color"/);
+  assert.match(html, /id="background-swatch" type="color"/);
+  assert.match(html, /id="fill-apply" type="button">Apply</);
+  assert.match(html, /id="show-saved" type="button">Saved</);
+  assert.match(html, /id="show-edited" type="button">Edited</);
+  assert.match(html, /id="action-copy" type="button">Copy</);
+  assert.match(html, /id="action-export" type="button">Export</);
+  assert.match(html, /id="action-export-png" type="button">Export PNG</);
+  assert.match(html, /aria-pressed="true"/, 'one background preset starts pressed');
+  assert.ok(!html.includes('<svg'), 'no SVG markup is ever placed in the DOM');
+});
+
+test('editor CSS follows the VS Code theme variables with design-B dark fallbacks (Issue #45)', async () => {
+  const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
+  for (const variable of ['--vscode-editor-background', '--vscode-sideBar-background', '--vscode-panel-border',
+    '--vscode-button-background', '--vscode-button-foreground', '--vscode-button-secondaryBackground',
+    '--vscode-input-background', '--vscode-input-border', '--vscode-foreground',
+    '--vscode-descriptionForeground', '--vscode-focusBorder'])
+    assert.ok(css.includes(`var(${variable}`), `missing theme variable ${variable}`);
+  for (const fallback of ['#1e1e1e', '#252526', '#3c3c3c', '#0e639c'])
+    assert.ok(css.includes(fallback), `missing design-B fallback ${fallback}`);
+  assert.match(css, /#preview-area\.checkerboard \{[^}]*background-image: var\(--vpe-checker\)/);
+  assert.match(css, /--vpe-checker: repeating-conic-gradient\(rgba\(128, 128, 128/);
+  assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export PNG is the primary action');
+  assert.match(css, /#tool-save \{[^}]*background: var\(--vpe-accent\)/, 'Save is the primary toolbar action');
+});

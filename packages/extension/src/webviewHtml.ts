@@ -36,17 +36,51 @@ export function buildEditorHtml(assets: WebviewAssets): string {
 <link rel="stylesheet" href="${assets.styleUri}">
 </head>
 <body>
-<div id="meta">Loading…</div>
 <div id="panes">
-  <div id="preview-pane">
-    <div id="preview-toggle" role="group" aria-label="Preview source">
-      <button id="show-saved" type="button">Saved PNG</button>
-      <button id="show-edited" type="button">Edited SVG</button>
+  <div id="code-pane">
+    <div id="code-toolbar" role="toolbar" aria-label="Source actions">
+      <button id="tool-save" type="button">Save</button>
+      <button id="tool-format" type="button">Format</button>
+      <span id="meta">Loading…</span>
     </div>
-    <div id="preview-status"></div>
-    <img id="preview" alt="PNG preview">
+    <div id="editor"></div>
   </div>
-  <div id="editor"></div>
+  <div id="preview-pane">
+    <div id="preview-header">
+      <span id="preview-title">Preview</span>
+      <div id="bg-presets" role="group" aria-label="Preview background">
+        <button id="bg-checkerboard" type="button" title="Checkerboard background" aria-label="Checkerboard background" aria-pressed="true">▦</button>
+        <button id="bg-white" type="button" title="White background" aria-label="White background" aria-pressed="false">■</button>
+        <button id="bg-black" type="button" title="Black background" aria-label="Black background" aria-pressed="false">■</button>
+      </div>
+    </div>
+    <div id="fill-row">
+      <label id="fill-label" for="fill-text">FILL</label>
+      <input id="fill-swatch" type="color" value="#000000" aria-label="Root fill colour">
+      <input id="fill-text" type="text" placeholder="(none)" aria-label="Root fill value">
+      <button id="fill-apply" type="button">Apply</button>
+    </div>
+    <div id="background-row">
+      <label id="background-label" for="background-text">BACKGROUND</label>
+      <input id="background-swatch" type="color" value="#ffffff" aria-label="Preview background colour">
+      <input id="background-text" type="text" placeholder="#rrggbb" aria-label="Preview background colour value">
+    </div>
+    <div id="preview-mode-row">
+      <div id="preview-toggle" role="group" aria-label="Preview source">
+        <button id="show-saved" type="button">Saved</button>
+        <button id="show-edited" type="button">Edited</button>
+      </div>
+      <div id="preview-status"></div>
+    </div>
+    <div id="preview-area">
+      <img id="preview" alt="PNG preview">
+    </div>
+    <div id="preview-actions">
+      <button id="action-copy" type="button">Copy</button>
+      <button id="action-export" type="button">Export</button>
+      <button id="action-export-png" type="button">Export PNG</button>
+    </div>
+  </div>
 </div>
 <script id="vpe-config" type="application/json" nonce="${assets.nonce}">${config}</script>
 <script nonce="${assets.nonce}" src="${assets.monacoVsUri}/loader.js"></script>
