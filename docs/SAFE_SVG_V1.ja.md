@@ -34,4 +34,4 @@ Coreのテストが、policy、生成物、実装自身のallowlistの間のい�
 
 ## Issue #22 に対する状態
 
-Phase 0とPhase 1を実装し、SC-01からSC-09、SC-11、SC-12を `packages/core/tests/test_safe_svg_schema.py` で検証しました。Phase 2（Codex Skillの文面、エディターでのMonacoメタデータ消費）とSC-10のエンドツーエンド生成実行が残ります。SC-10の機構自体はP3-01のCLI往復テストで既にカバーされています。
+Phase 0とPhase 1を実装し、SC-01からSC-09、SC-11、SC-12を `packages/core/tests/test_safe_svg_schema.py` で検証しました。Phase 2も実装しました。`skills/vector-png/SKILL.md` に生成手順（ルールを読む、XMLを直接生成する、検証する、直して再検証する、検査したリビジョンでbuildする、verifyする）を収め、エディターのMonaco補完は生成メタデータを消費するようになりました。ホストが `safe-svg-v1.monaco.json`（パッケージ時は `media/schemas` 配下、チェックアウト時はリポジトリの `schemas/`）を読み込み、要素内での補完はその要素に許された子要素だけに限られます。SC-10は `tests/integration/test_skill_workflow.py` でエンドツーエンドに実行され、不適合なSVGが既存PNGを決して上書きしない規則も含みます。Issue #22に残るのは、Phase 3としてSCマトリクス全体のクロスプラットフォーム確認だけです（Coreマトリクスは既に3 OSでスキーマテストを実行しています）。
