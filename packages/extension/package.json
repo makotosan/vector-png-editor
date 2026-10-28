@@ -2,7 +2,7 @@
   "name": "vector-png-editor",
   "displayName": "Vector PNG Editor",
   "description": "Edit PNG files with an embedded safe-svg-v1 SVG source.",
-  "version": "0.1.0-dev0",
+  "version": "0.1.0-dev3",
   "private": true,
   "publisher": "makotosan",
   "engines": {
@@ -25,12 +25,14 @@
     "check": "tsc -p .",
     "test": "node --test tests/*.test.mjs",
     "bundle:monaco": "node scripts/copy-monaco.mjs",
-    "vscode:prepublish": "node scripts/copy-monaco.mjs && node scripts/copy-schemas.mjs",
-    "bundle:schemas": "node scripts/copy-schemas.mjs"
+    "vscode:prepublish": "node scripts/copy-monaco.mjs && node scripts/copy-schemas.mjs && node scripts/bundle-extension.mjs",
+    "bundle:schemas": "node scripts/copy-schemas.mjs",
+    "bundle:extension": "node scripts/bundle-extension.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
     "@types/vscode": "1.90.0",
+    "esbuild": "0.28.2",
     "typescript": "5.9.3"
   },
   "contributes": {
