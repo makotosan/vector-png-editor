@@ -1,0 +1,49 @@
+{
+  "profile": "svg-normalization-v1",
+  "status": "failure",
+  "input_sha256": "13f9d140197243508b843f9fabb7cde11036a811abb6b8e40fcd8f5b8eab7d50",
+  "output_sha256": null,
+  "changes": {
+    "style_elements": 1,
+    "class_attributes": 26,
+    "inline_styles": 0,
+    "applied_declarations": 31,
+    "expanded_markers": 0
+  },
+  "accessibility": [
+    {
+      "element": "/svg[1]",
+      "attribute": "aria-describedby",
+      "value": "description",
+      "target": "desc"
+    },
+    {
+      "element": "/svg[1]",
+      "attribute": "aria-labelledby",
+      "value": "title",
+      "target": "title"
+    },
+    {
+      "element": "/svg[1]",
+      "attribute": "role",
+      "value": "img",
+      "loss": "unsupported-semantics"
+    }
+  ],
+  "checks": {
+    "input": "pass",
+    "safe_svg": "pass",
+    "render": "not-checked",
+    "container": "not-applicable",
+    "authenticity": "not-verified"
+  },
+  "render": null,
+  "errors": [],
+  "warnings": [
+    {
+      "code": "accessibility-loss",
+      "stage": "accessibility",
+      "explanation": "Review recorded semantic losses"
+    }
+  ]
+}
