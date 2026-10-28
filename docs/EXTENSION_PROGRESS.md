@@ -588,3 +588,12 @@ convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live
 screenshot comparison in a VS Code host remains Issue #18 work;
 Issue #45 stays open for that check.
+
+Follow-up (2026-10-29, user report): the code-folding chevrons
+did not render - Monaco loads its codicon icon font from an
+inlined `data:` URI, which the CSP's `font-src` (webview origin
+only) blocked; the hover tooltip appeared but no glyph. `font-src`
+now also allows `data:`; all other directives are unchanged, and
+the CSP test pins the value. Verified in the headless harness
+under the real CSP: the codicon font loads and the chevrons
+render in the folding gutter.
