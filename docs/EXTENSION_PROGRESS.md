@@ -199,3 +199,41 @@ document reloads after its edit and observes a deletion. The
 TypeScript type check passed. Live watcher behavior in an extension
 host remains P3 acceptance work, so P2-06 stays open until that
 evidence exists.
+
+## Python venv lifecycle — P2-07
+
+The extension now integrates the bridge managed-environment manager
+(P1-04) instead of requiring a hand-set interpreter path. A new
+framework-free discovery module probes the usual candidates
+(`py -3.13/-3.12/-3.11/-3` on Windows; versioned `python3.x` names then
+`python3`/`python` elsewhere) with an isolated version probe that
+reports the real executable - discovery is read-only, and a miss is
+explained to the user (no Python, or only unsupported versions) with
+per-platform install guidance, including the native Cairo note. The
+**Set Up Python Environment** command locates trusted Core artifacts
+(the `vectorPng.coreWheelPath` setting, a wheel bundled under
+`managed/`, or a sibling checkout's built wheel), asks before any
+network use (default offline with a local wheelhouse), and runs the
+manager with progress and cancellation: the new environment activates
+only after the manager's package, dependency and real-render health
+checks, so a failed or cancelled setup preserves the previously
+active environment and every document. Status and rollback commands
+expose the manager's state and health-checked rollback. Python
+resolution for previews and saving is now the explicit setting when
+set, otherwise the managed active interpreter; a corrupt store fails
+closed. The extension bundles a byte-identical copy of the repository
+requirements lock under `managed/`, guarded by a test.
+
+Local verification: 84 extension unit tests passed with a real Core
+(76 passed and 8 skipped without one), including discovery matrices,
+resolution precedence, corrupt-store handling and lock parity. Beyond
+unit tests, the full flow was executed for real in a path containing
+spaces and Japanese characters: discovery found Python 3.12.3, an
+offline setup from the built 0.1.0.dev3 wheel and a local wheelhouse
+activated an environment whose managed Core validated a source, a
+bad-digest retry was rejected with the active environment preserved,
+a second setup switched activation, and rollback returned to the
+first environment. The TypeScript type check passed. Running the
+commands inside a live VS Code host remains P3 acceptance work, so
+P2-07 stays open until that evidence exists. This completes the P2
+series (P2-01 to P2-07).
