@@ -11,6 +11,8 @@ test('CSP blocks network and limits scripts to nonce plus packaged resources', (
   assert.match(csp, /connect-src 'none'/);
   assert.match(csp, /script-src 'nonce-abc123' https:\/\/webview\.example/);
   assert.match(csp, /worker-src https:\/\/webview\.example blob:/);
+  assert.match(csp, /font-src https:\/\/webview\.example data:/,
+    'Monaco loads its codicon font from an inlined data: URI; without it the folding chevrons are invisible');
 });
 
 test('HTML shell contains no user SVG and loads only local assets', () => {
