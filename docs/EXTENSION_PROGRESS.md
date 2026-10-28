@@ -323,10 +323,22 @@ UTF-8 write guarded by the same SHA-256 revision agreement the Core
 enforces for PNG saves (`src/svgSave.ts`) instead of a Core rebuild.
 Display is never blocked by safe-svg-v1 validation: diagnostics stay
 advisory in the source pane, and the edited preview renders the
-source as-is from a private file through the webview `<img>`
-(`src/svgPreview.ts`), because the Core preview path validates
-against the profile before rendering and cannot show a general SVG.
-No SVG markup enters the DOM and the restrictive CSP is unchanged.
+source as-is through the webview `<img>`, because the Core preview
+path validates against the profile before rendering and cannot
+show a general SVG. No SVG markup enters the DOM.
+
+The preview transport changed after the Issue #18 live check
+(2026-10-29): temporary preview files served as webview resources
+are refused with a 401 by the webview resource server in a real VS
+Code host, so edited previews no longer travel as files at all. A
+plain SVG's edited preview is rendered inside the webview from the
+model text as a blob URL (mirroring the host pipeline's 300 ms
+debounce and its no-<svg>-root invalid outcome), and a
+vector-png's Core-rendered PNG is posted to the webview as a data
+URI; the CSP's img-src therefore also allows `data:` and `blob:`.
+The saved view still shows the actual file through a webview
+resource, which loads normally. The former temporary-file SVG
+renderer (`src/svgPreview.ts`) is removed.
 
 The new command `Vector PNG: Export as Vector PNG`
 (`vectorPng.exportAsVectorPng`; command palette, explorer context for
@@ -540,8 +552,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 167 tests with 0 failures
-and 12 skips by default, and 179 of 179 with a real Core (the
+Verification: the extension suite passes 166 tests with 0 failures
+and 12 skips by default, and 178 of 178 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -552,7 +564,9 @@ idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
 design-B CSS variables, the Monaco theme sync, the word-wrap toggle
-(the Toggle Word Wrap command and the Wrap button, persisted per panel), and the plain-PNG export with fake
+(the Toggle Word Wrap command and the Wrap button, persisted per panel), the edited-preview transport (no preview travels as a
+webview-resource file; SVG previews are blob URLs built in the
+webview and Core PNG previews arrive as data URIs), and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,
 convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live

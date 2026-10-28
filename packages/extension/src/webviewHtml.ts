@@ -15,7 +15,7 @@ export function cspFor(assets: WebviewAssets): string {
   return [
     `default-src 'none'`,
     `connect-src 'none'`,
-    `img-src ${assets.cspSource}`,
+    `img-src ${assets.cspSource} data: blob:`,
     `font-src ${assets.cspSource}`,
     // Monaco injects its own styles at runtime; scripts stay nonce-bound
     // and limited to packaged resources.

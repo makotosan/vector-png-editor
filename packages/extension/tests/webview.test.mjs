@@ -137,3 +137,19 @@ test('editor CSS follows the VS Code theme variables with design-B dark fallback
   assert.match(css, /--vpe-btn-radius: 6px/, 'buttons are rounded rectangles');
   assert.match(css, /button \{[^}]*border: 1px solid var\(--vpe-btn-border\); border-radius: var\(--vpe-btn-radius\)/, 'every button is a rounded-rect outline');
 });
+
+test('edited previews never load as webview resources (Issue #47 follow-up)', async () => {
+  const csp = cspFor(assets);
+  assert.match(csp, /img-src https:\/\/webview\.example data: blob:/,
+    'the saved file loads from the webview origin; edited previews use data:/blob: URIs');
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /URL\.createObjectURL\(new Blob\(\[source\], \{ type: 'image\/svg\+xml' \}\)\)/,
+    'an SVG document renders its edited preview locally from the model text');
+  assert.match(js, /The source has no <svg> root element to preview/,
+    'a source without an svg root reports the invalid outcome instead of a broken image');
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /data:image\/png;base64,\$\{Buffer\.from\(bytes\)\.toString\('base64'\)\}/,
+    'a Core-rendered PNG preview is posted as a data URI');
+  assert.match(host, /kind: document\.kind/, 'init tells the webview the document kind');
+  assert.ok(!host.includes('createSvgPreviewRenderer'), 'the temporary-file SVG preview renderer is gone');
+});
