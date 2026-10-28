@@ -116,7 +116,22 @@
   },
   {
     "id": "unsupported-marker-host",
-    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><defs><marker id=\"a\" markerWidth=\"12\" markerHeight=\"12\" refX=\"10\" refY=\"6\" orient=\"auto\"><path d=\"M0,0 L12,6 L0,12 Z\" fill=\"black\"/></marker></defs><path d=\"M0 0 C1 2 3 4 5 6\" fill=\"none\" marker-end=\"url(#a)\"/></svg>",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><defs><marker id=\"a\" markerWidth=\"12\" markerHeight=\"12\" refX=\"10\" refY=\"6\" orient=\"auto\"><path d=\"M0,0 L12,6 L0,12 Z\" fill=\"black\"/></marker></defs><path d=\"M0 0 C5 6 5 6 5 6\" fill=\"none\" marker-end=\"url(#a)\"/></svg>",
     "expect": "unsupported-css"
+  },
+  {
+    "id": "letter-spacing",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.brand {font-family: sans-serif; font-size: 20px; letter-spacing: 2px; fill: #222}</style><text class=\"brand\" x=\"10\" y=\"40\">ACME</text></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "curved-marker-host",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" role=\"img\" aria-labelledby=\"t\"><title id=\"t\">Curved arrow</title><defs><marker id=\"arrow\" markerWidth=\"12\" markerHeight=\"12\" refX=\"10\" refY=\"6\" orient=\"auto\"><path d=\"M0,0 L12,6 L0,12 Z\" fill=\"#363636\"/></marker><style>.arrow {fill: none; stroke: black; stroke-width: 2; marker-end: url(#arrow)}</style></defs><path class=\"arrow\" d=\"M20 90 C60 90 80 30 130 30\"/></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "font-family-system-names",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>text {font-family: -apple-system,BlinkMacSystemFont,\"Yu Gothic\",sans-serif; font-size: 16px}</style><text x=\"10\" y=\"40\">Text</text></svg>",
+    "expect": "accept"
   }
 ]

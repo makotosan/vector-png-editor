@@ -1,6 +1,6 @@
 # safe-svg-v1 policy: the single machine-readable normative data for
 # the profile, per Issue #22 (v1.2). Allowlists and value rules mirror
-# the pinned specification (makotosan/vector-png-spec@8238ebda,
+# the pinned specification (makotosan/vector-png-spec@12994c5,
 # profiles/safe-svg-v1.md, draft 0.1) and the Core implementation
 # (packages/core/src/vector_png_editor/_backend.py); a Core test
 # enforces that they never drift. Content models are the strict
@@ -10,7 +10,7 @@
 profile: safe-svg-v1
 profile_version: 1.0.0
 spec_repository: makotosan/vector-png-spec
-spec_revision: 8238ebdaa136f448affa53133b99ee5afde5765a
+spec_revision: 12994c57121b759c835ee28cd25b88c12f67463c
 spec_document: profiles/safe-svg-v1.md
 namespace: http://www.w3.org/2000/svg
 max_bytes: 1000000
