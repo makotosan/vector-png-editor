@@ -9,7 +9,7 @@ from .errors import CoreError
 from .svg import MAX_SVG
 
 MAX_REQUEST = 2_000_000
-COMMANDS = {"inspect", "extract", "validate", "build", "verify", "rebuild"}
+COMMANDS = {"inspect", "extract", "validate", "build", "verify", "rebuild", "normalize", "convert"}
 
 
 def _unique(pairs):
@@ -44,6 +44,8 @@ def parse_request(stream):
     allowed = {"protocol", "command", "request_id", "input"}
     if command in {"extract", "build", "rebuild"}:
         allowed.add("output")
+    if command in {"normalize", "convert"}:
+        allowed |= {"output", "report"}
     if command in {"validate", "build"}:
         allowed |= {"source_base64", "width", "height"}
     if command == "validate":
@@ -67,7 +69,7 @@ def parse_request(stream):
             raise CoreError("invalid-arguments", "Invalid source_base64") from exc
         if len(source) > MAX_SVG:
             raise CoreError("resource-limit", "SVG exceeds byte limit")
-    for key in ("input", "output"):
+    for key in ("input", "output", "report"):
         if key in request and (type(request[key]) is not str or not 1 <= len(request[key]) <= 32768
                                or "\0" in request[key]):
             raise CoreError("invalid-arguments", "Invalid path")
@@ -75,6 +77,8 @@ def parse_request(stream):
         raise CoreError("invalid-arguments", "Missing input")
     if command in {"extract", "build", "rebuild"} and "output" not in request:
         raise CoreError("invalid-arguments", "Missing output")
+    if command in {"normalize", "convert"} and ("output" not in request or "report" not in request):
+        raise CoreError("invalid-arguments", "Missing output or report")
     width, height = request.get("width", 1024), request.get("height", 1024)
     if type(width) is not int or type(height) is not int or not 1 <= width <= 4096 or not 1 <= height <= 4096 or width * height > 4_000_000:
         raise CoreError("invalid-arguments", "Invalid request viewport")
@@ -90,5 +94,6 @@ def parse_request(stream):
     path = Path(request["input"]) if "input" in request else None
     return argparse.Namespace(command=command, request_id=request["request_id"], source=source,
         png=path, svg=path, output=Path(request["output"]) if "output" in request else None,
+        report=Path(request["report"]) if "report" in request else None,
         width=width, height=height, syntax_only=request.get("syntax_only", False),
         overwrite=request.get("overwrite", False), expected_sha256=token)

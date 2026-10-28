@@ -14,6 +14,14 @@ EXIT_CODES = {
     "render-mismatch": 12,
     "conflict": 13,
     "cancelled": 14,
+    # svg-normalization-v1 report failure codes (profile section 7),
+    # mapped onto the existing exit-code ranges.
+    "invalid-xml": 4,
+    "unsafe-input": 4,
+    "unsupported-css": 5,
+    "invalid-reference": 5,
+    "output-alias": 9,
+    "render-error": 10,
 }
 
 
