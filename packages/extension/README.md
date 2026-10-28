@@ -110,6 +110,30 @@ The view type and commands have not changed since P2-01.
 Compilation/bundling for VSIX distribution is P3-04 scope; `npm run check`
 type-checks the sources.
 
+## Editor UI: buttons by document kind
+
+The split editor (Issues #44–#47) shows the same controls for every
+editable document, but several behave differently per kind. A plain
+PNG opens in a view-only page instead (Issue #46): no buttons at all,
+just the image centred on a checkerboard, and the file is never
+modified. The preview pane opens on the **Editing** view for both
+editable kinds.
+
+| Control | vector-png | SVG |
+|---|---|---|
+| Save | The Python Core rebuilds the PNG from the source (Core required; a source that fails validation is not saved and the file is unchanged) | The text is written back byte-exact under a SHA-256 guard (no Core needed; never blocked by validation) |
+| Format | Applies the indentation-only formatter as one edit | Same |
+| Wrap | Toggles Monaco word wrap (also Alt+Z / the Toggle Word Wrap command; persisted per panel) | Same |
+| Background presets / BACKGROUND | Preview presentation only; never touches the source or the file | Same (the view-only page has a fixed checkerboard instead) |
+| FILL + Apply | Edits the root `<svg>` `fill` as one undoable edit on Apply; the row is disabled when no root element can be located | Same |
+| PNG (preview toggle) | Shows the raster image stored in the file | Disabled (greyed out): an SVG file holds no PNG image |
+| Editing (preview toggle) | The current source rendered by the Core (Core required; a profile-invalid source shows the failure instead) | The current text rendered in place (no Core needed; never blocked by validation) |
+| Copy | Copies the current source text | Same |
+| Export | Saves the current source as `.svg` (default name `<base>.svg`) | Same (default name `<base>-copy.svg`) |
+| Export PNG | Saves a plain PNG with no embedded source (default `<base>.plain.png`; Core required; a non-conforming source renders via normalization and says so) | Same (default `<base>.png`; Core required) |
+| Normalize SVG | — (command and button are SVG-only) | Button under the action row, SVG documents only: applies Core normalization as one undoable edit (Core required) |
+| Export as Vector PNG | — (command and button are SVG-only) | Button under the action row, SVG documents only: writes the sibling `.png` as a vector-png (Core required); the source file is never modified |
+
 ## Tests
 
 ```sh

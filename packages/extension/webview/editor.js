@@ -255,6 +255,13 @@ document.getElementById('tool-format').addEventListener('click', () => vscode.po
 document.getElementById('action-copy').addEventListener('click', () => vscode.postMessage({ type: 'copySource' }));
 document.getElementById('action-export').addEventListener('click', () => vscode.postMessage({ type: 'exportSource' }));
 document.getElementById('action-export-png').addEventListener('click', () => vscode.postMessage({ type: 'exportPng' }));
+// SVG-only panel buttons (Issue #47 commands): the row stays hidden
+// until init identifies an SVG document. Null-safe like the Wrap
+// wiring - a page retained across an upgrade may predate the row.
+const normalizeButton = document.getElementById('action-normalize');
+if (normalizeButton) normalizeButton.addEventListener('click', () => vscode.postMessage({ type: 'normalizeSvg' }));
+const exportVectorPngButton = document.getElementById('action-export-vector-png');
+if (exportVectorPngButton) exportVectorPngButton.addEventListener('click', () => vscode.postMessage({ type: 'exportAsVectorPng' }));
 refreshBackground();
 let revision = 0;
 let applyingHostUpdate = false;
@@ -340,6 +347,10 @@ window.addEventListener('message', (event) => {
         vscode.postMessage({ type: 'setPreviewMode', mode: 'edited' });
         persistPanelState();
       }
+      // The SVG-only action row (Normalize SVG / Export as Vector
+      // PNG) appears for SVG documents only.
+      const svgActions = document.getElementById('preview-actions-svg');
+      if (svgActions) svgActions.hidden = false;
     }
     refreshPreview();
     refreshBackground();

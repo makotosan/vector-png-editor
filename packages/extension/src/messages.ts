@@ -16,13 +16,17 @@ export type WebviewMessage =
   | { type: 'copySource' }
   | { type: 'exportSource' }
   | { type: 'exportPng' }
+  // SVG-document panel buttons (Issue #47 commands, added as panel
+  // buttons at the user's request, 2026-10-29): same no-payload rule.
+  | { type: 'normalizeSvg' }
+  | { type: 'exportAsVectorPng' }
   | { type: 'applyRootFill'; value: string };
 
 export type MessageValidation = { ok: true; message: WebviewMessage } | { ok: false; reason: string };
 
 const MAX_MESSAGE_CHARS = MAX_SVG_BYTES + 4096;
 
-const NO_FIELD_MESSAGES = new Set(['ready', 'saveDocument', 'formatSource', 'copySource', 'exportSource', 'exportPng']);
+const NO_FIELD_MESSAGES = new Set(['ready', 'saveDocument', 'formatSource', 'copySource', 'exportSource', 'exportPng', 'normalizeSvg', 'exportAsVectorPng']);
 
 export function validateWebviewMessage(value: unknown, serializedSize?: number): MessageValidation {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
