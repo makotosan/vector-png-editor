@@ -525,8 +525,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 163 tests with 0 failures
-and 12 skips by default, and 175 of 175 with a real Core (the
+Verification: the extension suite passes 164 tests with 0 failures
+and 12 skips by default, and 176 of 176 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -536,7 +536,7 @@ unavailable), the formatter (nesting, raw-region preservation,
 idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
-design-B CSS variables, and the plain-PNG export with fake
+design-B CSS variables, the Monaco theme sync, and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,
 convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live
