@@ -61,3 +61,9 @@ Revertはディスクから原文を読み直します。バックアップは�
 拡張は、手でinterpreterパスを設定する方式ではなく、bridgeの管理下環境manager（P1-04）を統合しました。新しいフレームワーク非依存の検出モジュールが、通常の候補（Windowsでは `py -3.13/-3.12/-3.11/-3`、その他では版付き `python3.x` 名の後に `python3`／`python`）を、実executableを報告する隔離された版probeで調べます。検出は読み取り専用で、見つからない場合（Python不在、または未対応版のみ）はプラットフォーム別の導入案内（native Cairoの注意を含む）とともにユーザーへ説明します。**Set Up Python Environment** コマンドは信頼できるCore成果物（`vectorPng.coreWheelPath` 設定、`managed/` に同梱されたwheel、兄弟checkoutのビルド済みwheel）を特定し、ネットワーク使用前に確認を取り（既定はローカルwheelhouseのみのoffline）、進行表示と取消つきでmanagerを実行します。新しい環境は、managerのパッケージ・依存・実描画の健全性検査を通過した後にのみ有効化されるため、失敗・取消したsetupでは、それまで有効だった環境と全ての文書が保持されます。状態表示とrollbackのコマンドが、managerの状態と健全性検査付きrollbackを公開します。プレビューと保存のPython解決は、設定があればそれを、なければ管理下の有効なinterpreterを用い、破損したstoreはfail-closedとします。拡張はリポジトリーのrequirements lockとバイト単位で同一のコピーを `managed/` に同梱し、テストで保証します。
 
 ローカルでの検証：実Coreありで拡張の単体テスト84件が合格しました（Coreなしでは76件合格、8件スキップ）。検出マトリクス、解決の優先順位、破損storeの扱い、lockの同一性を含みます。単体テストを超えて、空白と日本語を含むパスで全フローを実際に実行しました。検出がPython 3.12.3を見つけ、ビルドした0.1.0.dev3 wheelとローカルwheelhouseからのoffline setupが環境を有効化し、その管理下Coreが原文を検証しました。digest不正の再試行は、有効な環境を保持したまま拒否され、2回目のsetupで有効化が切り替わり、rollbackで最初の環境へ戻りました。TypeScriptの型検査も合格しました。実VS Codeホスト内でのコマンド実行はP3の受入作業として残るため、P2-07はその証跡が得られるまでオープンのままです。これでP2系列（P2-01からP2-07）は完了です。
+
+## Monacoでの生成プロファイルメタデータ — v1.2 Phase 2
+
+エディターは、ミラーされた定数だけに頼るのではなく、生成されたsafe-svg-v1メタデータを消費するようになりました。拡張ホストは `schemas/safe-svg-v1.monaco.json`（policyから生成。パッケージ時は `scripts/copy-schemas.mjs` により `media/schemas` 配下、開発時はリポジトリのチェックアウトから読み込み）を厳格に解析し、要素、属性、内容モデル、テキスト要素をinitメッセージでwebviewへ送ります。要素内でのMonaco補完は、その要素に許された子要素だけに限られます。例えば `stop` はgradientの中でのみ提示されます。属性補完と助言的診断は従来どおりです。メタデータが無い、または不正な場合は `profile.ts` のミラー定数へフォールバックし、いずれの場合もPython CoreのValidatorが権威を持ちます。同じプロファイルから生成を駆動するCodex Skillは `skills/vector-png/SKILL.md` にあり、SC-10がそのワークフローをエンドツーエンドで検証します。
+
+ローカルでの検証：新しいprofile-dataテスト（正規メタデータとミラープロファイルの同一性、内容モデルの子集合、外部プロファイルの拒否）を含め、拡張スイートが合格し、TypeScript検査も合格しました。実VS Codeホストでの確認はP3受入作業（Issue #18）の一部として残ります。
