@@ -81,6 +81,10 @@ export function buildEditorHtml(assets: WebviewAssets): string {
       <button id="action-export" type="button">Export</button>
       <button id="action-export-png" type="button">Export PNG</button>
     </div>
+    <div id="preview-actions-svg" hidden>
+      <button id="action-normalize" type="button">Normalize SVG</button>
+      <button id="action-export-vector-png" type="button">Export as Vector PNG</button>
+    </div>
   </div>
 </div>
 <script id="vpe-config" type="application/json" nonce="${assets.nonce}">${config}</script>

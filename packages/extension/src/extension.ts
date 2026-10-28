@@ -623,6 +623,10 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         void exportSourceToFile();
       } else if (message.type === 'exportPng') {
         void exportPlainPngFromPanel();
+      } else if (message.type === 'normalizeSvg') {
+        void this.normalizeSvg(document.uri);
+      } else if (message.type === 'exportAsVectorPng') {
+        void this.exportAsVectorPng(document.uri);
       }
     });
     panel.onDidDispose(() => {

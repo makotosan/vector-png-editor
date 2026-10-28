@@ -423,6 +423,17 @@ and the failure is shown with its code and message, with the
 report's structured errors available in a diagnostics document -
 the same presentation discipline as the export validation failure.
 
+Both Issue #47 commands are also Preview-panel buttons (user
+request, 2026-10-29): for an SVG document, a second action row
+under Copy / Export / Export PNG shows **Normalize SVG** and
+**Export as Vector PNG**. The buttons post the same no-field
+webview messages as the other panel actions and the host runs the
+existing command implementations on the panel's own document, so
+button and command can never diverge. The row stays hidden for
+vector-png documents. The extension README gains a "buttons by
+document kind" table recording how every control behaves for
+vector-png, SVG and plain-PNG (view-only) documents.
+
 Verification: the suite passes 111 tests with 0 failures and 12
 skips by default (the two new real-Core tests gate on
 VECTOR_PNG_TEST_PYTHON like the existing integration tests), and
@@ -556,8 +567,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 167 tests with 0 failures
-and 12 skips by default, and 179 of 179 with a real Core (the
+Verification: the extension suite passes 168 tests with 0 failures
+and 12 skips by default, and 180 of 180 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,

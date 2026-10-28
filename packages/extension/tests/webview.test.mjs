@@ -163,3 +163,19 @@ test('preview toggle opens on Editing; an SVG document disables the PNG view (Is
   const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
   assert.match(css, /#preview-toggle button:disabled \{ opacity: 0\.45;/, 'the disabled PNG button is greyed out');
 });
+
+test('SVG documents get Normalize SVG and Export as Vector PNG panel buttons (Issue #47)', async () => {
+  const html = buildEditorHtml(assets);
+  assert.match(html, /id="preview-actions-svg" hidden/, 'the SVG action row starts hidden');
+  assert.match(html, /id="action-normalize" type="button">Normalize SVG</);
+  assert.match(html, /id="action-export-vector-png" type="button">Export as Vector PNG</);
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /postMessage\(\{ type: 'normalizeSvg' \}\)/, 'the button posts the normalizeSvg message');
+  assert.match(js, /postMessage\(\{ type: 'exportAsVectorPng' \}\)/, 'the button posts the exportAsVectorPng message');
+  assert.match(js, /svgActions\.hidden = false;/, 'init reveals the row for SVG documents');
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /message\.type === 'normalizeSvg'\) \{\s*void this\.normalizeSvg\(document\.uri\);/,
+    'the host runs the existing Normalize SVG command logic for this document');
+  assert.match(host, /message\.type === 'exportAsVectorPng'\) \{\s*void this\.exportAsVectorPng\(document\.uri\);/,
+    'the host runs the existing Export as Vector PNG command logic for this document');
+});

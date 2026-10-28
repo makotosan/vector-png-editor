@@ -114,6 +114,9 @@ input[aria-invalid="true"] { outline: 1px solid var(--vpe-error); outline-offset
 #preview-area img { max-width: 100%; max-height: 100%; }
 #preview-actions { display: flex; gap: 6px; margin-top: auto; }
 #preview-actions button { flex: 1; }
+#preview-actions-svg { display: flex; gap: 6px; margin-top: 6px; }
+#preview-actions-svg[hidden] { display: none; }
+#preview-actions-svg button { flex: 1; }
 #action-export-png { background: var(--vpe-accent); color: var(--vpe-accent-fg); border-color: var(--vpe-accent); }
 #action-export-png:hover { background: var(--vpe-accent-hover); }
 
