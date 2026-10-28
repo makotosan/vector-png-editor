@@ -39,12 +39,23 @@ let savedUri = '';
 function refreshPreview() {
   const img = document.getElementById('preview');
   const uri = previewState.visibleUri(savedUri);
-  if (uri && img.getAttribute('src') !== uri) img.src = uri;
+  if (uri) {
+    img.style.display = '';
+    if (img.getAttribute('src') !== uri) img.src = uri;
+  } else {
+    // Nothing to show for this mode yet (or the render failed):
+    // hide the image so the pane shows the status explanation
+    // below instead of a broken-image icon.
+    img.removeAttribute('src');
+    img.style.display = 'none';
+  }
   document.getElementById('show-saved').setAttribute('aria-pressed', String(previewState.mode === 'saved'));
   document.getElementById('show-edited').setAttribute('aria-pressed', String(previewState.mode === 'edited'));
   const status = document.getElementById('preview-status');
   status.textContent = previewState.mode === 'edited'
-    ? (previewState.editedError ?? (previewState.editedUri ? '' : 'No edited preview yet.'))
+    ? (previewState.editedError ?? (previewState.editedUri
+      ? (previewState.editedRevision < revision ? 'Rendering the edited preview…' : '')
+      : 'No edited preview yet.'))
     : '';
 }
 document.getElementById('show-saved').addEventListener('click', () => {
@@ -70,13 +81,41 @@ if (persistedPanel.previewMode === 'edited') previewState.showEdited();
 previewState.setBackgroundPreset(typeof persistedPanel.backgroundPreset === 'string' ? persistedPanel.backgroundPreset : 'checkerboard');
 if (typeof persistedPanel.customColor === 'string') previewState.setBackgroundCustom(persistedPanel.customColor);
 if (previewState.mode !== 'saved') vscode.postMessage({ type: 'setPreviewMode', mode: previewState.mode });
+// Word wrap for the code pane (Issue #45 follow-up): off by default,
+// toggled by Alt+Z or the toolbar Wrap button, persisted per panel
+// like the other panel choices. The editor picks the value up at
+// creation and on every toggle.
+let wordWrapOn = persistedPanel.wordWrap === true;
 function persistPanelState() {
   vscode.setState({
     previewMode: previewState.mode,
     backgroundPreset: previewState.backgroundPreset,
     customColor: previewState.customColor,
+    wordWrap: wordWrapOn,
   });
 }
+function refreshWordWrap() {
+  // Null-safe: a webview page retained across an extension upgrade
+  // can predate the Wrap button; the script must degrade, not die.
+  const button = document.getElementById('tool-wrap');
+  if (button) button.setAttribute('aria-pressed', String(wordWrapOn));
+  if (editor) editor.updateOptions({ wordWrap: wordWrapOn ? 'on' : 'off' });
+}
+function toggleWordWrap() {
+  wordWrapOn = !wordWrapOn;
+  refreshWordWrap();
+  persistPanelState();
+}
+const wrapButton = document.getElementById('tool-wrap');
+if (wrapButton) wrapButton.addEventListener('click', toggleWordWrap);
+// Alt+Z is a workbench keybinding, not a page shortcut: the
+// extension contributes vectorPng.toggleWordWrap (Alt+Z while this
+// editor is the active custom editor, also on the command palette
+// and the webview context menu), and the host posts a
+// 'toggleWordWrap' message here. Owning the key on the host side
+// means it works wherever focus sits in the workbench and can never
+// double-toggle against a page-level listener.
+refreshWordWrap();
 
 function refreshBackground() {
   const area = document.getElementById('preview-area');
@@ -211,6 +250,7 @@ require(['vs/editor/editor.main'], (monaco) => {
   editor = monaco.editor.create(document.getElementById('editor'), {
     value: '',
     language: 'xml',
+    wordWrap: wordWrapOn ? 'on' : 'off',
     automaticLayout: true,
     minimap: { enabled: false },
     // Editing is enabled so completion and diagnostics can be exercised;
@@ -263,6 +303,8 @@ window.addEventListener('message', (event) => {
     }
   } else if (message.type === 'rootFill') {
     refreshRootFill(message.available === true, typeof message.value === 'string' ? message.value : '');
+  } else if (message.type === 'toggleWordWrap') {
+    toggleWordWrap();
   } else if (message.type === 'notice') {
     document.getElementById('meta').textContent = message.text;
   } else if (message.type === 'saved') {

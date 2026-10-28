@@ -437,7 +437,10 @@ centred on the chosen background, and a bottom action row of **Copy**
 | **Export** | **Export PNG**. The toggle labels read "Saved" /
 "Edited" for both document kinds (the state machine semantics are
 unchanged: the pane opens on the saved view and switches only
-manually). The styling follows the user's chosen design B (VS Code
+manually). When the edited render has not arrived yet or has
+failed, the pane hides the image and the status line explains the
+state (rendering, none yet, or the failure) instead of leaving a
+broken-image placeholder. The styling follows the user's chosen design B (VS Code
 dark-theme fusion): every colour is a VS Code theme CSS variable
 (`--vscode-editor-background`, `--vscode-sideBar-background`,
 `--vscode-panel-border`, `--vscode-button-background`,
@@ -447,7 +450,9 @@ companions) collected in a single `:root` block in
 family, #252526 panel, #3c3c3c borders, #0e639c accent) only as
 `var()` fallbacks, so the page follows the active colour theme.
 Save and Export PNG are the primary accent buttons; everything else
-is a secondary button; the checkerboard is a translucent-grey
+is a secondary button; every button carries a visible
+rounded-rectangle outline (the reference UI's button style, 6px
+radius, `--vpe-btn-border` / `--vpe-btn-radius`); the checkerboard is a translucent-grey
 `repeating-conic-gradient` that reads as dark greys on a dark panel
 and light greys on a light one. The Monaco code area follows the
 same theme: the theme class VS Code stamps on the webview body
@@ -494,7 +499,17 @@ edit: it rewrites only the leading indentation of structural lines
 to match the element nesting, never joins or splits lines, and
 leaves `<style>`/`<text>`/`<tspan>` content, comments and CDATA
 byte-for-byte untouched; an already formatted source is a no-op
-reported on the meta line. **Copy** writes the current source text
+reported on the meta line. A **Wrap** toolbar button and the
+extension command **Vector PNG: Toggle Word Wrap** toggle Monaco
+word wrap for the code pane (off by default). The command carries
+an **Alt+Z** keybinding scoped to this editor being the active
+custom editor (`activeCustomEditorId == vectorPng.editor`) and is
+also on the command palette and the webview context menu; the
+provider tracks the active panel and posts the toggle to its
+webview. (VS Code's own View-menu word-wrap item targets text
+editors and stays disabled in a custom editor, so the shortcut is
+the extension's own.) The choice persists per panel in the webview
+state alongside the preview mode and background. **Copy** writes the current source text
 to the clipboard on the host and confirms on the meta line.
 **Export** shows a save dialog (default `<base>.svg` for a
 vector-png document, `<base>-copy.svg` for an `.svg` document) and
@@ -516,7 +531,7 @@ and `<base>.plain.png` for a vector-png document; rendering happens
 before the dialog, any failure writes nothing, and the document's
 own path is refused as a target.
 
-Panel state — the preview mode and the background preset/custom
+Panel state — the preview mode, the word-wrap choice and the background preset/custom
 colour — persists per panel in the existing webview state mechanism
 (`vscode.setState`); the FILL value is not panel state and always
 mirrors the source. All new webview-to-host messages pass the strict
@@ -525,8 +540,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 164 tests with 0 failures
-and 12 skips by default, and 176 of 176 with a real Core (the
+Verification: the extension suite passes 167 tests with 0 failures
+and 12 skips by default, and 179 of 179 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -536,7 +551,8 @@ unavailable), the formatter (nesting, raw-region preservation,
 idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
-design-B CSS variables, the Monaco theme sync, and the plain-PNG export with fake
+design-B CSS variables, the Monaco theme sync, the word-wrap toggle
+(the Toggle Word Wrap command and the Wrap button, persisted per panel), and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,
 convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live

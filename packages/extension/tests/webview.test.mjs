@@ -55,9 +55,46 @@ test('Monaco follows the VS Code colour theme (Issue #45, design B)', async () =
   assert.match(js, /MutationObserver\(syncMonacoTheme\)/);
 });
 
+test('word wrap toggles via the host command message and the Wrap button, persisted per panel (Issue #45)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /message\.type === 'toggleWordWrap'\) \{\n    toggleWordWrap\(\);/, 'the host command message toggles wrap');
+  assert.ok(!js.includes("'KeyZ'"), 'Alt+Z is owned by the workbench keybinding, not a page listener');
+  assert.match(js, /const wrapButton = document\.getElementById\('tool-wrap'\);\nif \(wrapButton\) wrapButton\.addEventListener\('click', toggleWordWrap\)/, 'Wrap wiring is null-safe for pages retained across an upgrade');
+  assert.match(js, /if \(button\) button\.setAttribute\('aria-pressed', String\(wordWrapOn\)\)/);
+  assert.match(js, /wordWrap: wordWrapOn \? 'on' : 'off'/, 'editor creation takes the persisted choice');
+  assert.match(js, /editor\.updateOptions\(\{ wordWrap: wordWrapOn \? 'on' : 'off' \}\)/);
+  assert.match(js, /wordWrap: wordWrapOn,/, 'the choice is part of the persisted panel state');
+  assert.match(js, /persistedPanel\.wordWrap === true/);
+  const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
+  assert.match(css, /#tool-wrap\[aria-pressed="true"\]/);
+});
+
+test('preview pane hides the image instead of a broken icon while the edited render is missing (Issue #45)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /img\.removeAttribute\('src'\);\n    img\.style\.display = 'none';/);
+  assert.match(js, /previewState\.editedRevision < revision \? 'Rendering the edited preview…' : ''/);
+  assert.match(js, /'No edited preview yet\.'/);
+});
+
+test('Toggle Word Wrap is a workbench command with an Alt+Z keybinding (Issue #45)', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const command = manifest.contributes.commands.find((c) => c.command === 'vectorPng.toggleWordWrap');
+  assert.ok(command, 'command contributed');
+  assert.equal(command.title, 'Vector PNG: Toggle Word Wrap');
+  assert.deepEqual(manifest.contributes.keybindings, [
+    { command: 'vectorPng.toggleWordWrap', key: 'alt+z', when: 'activeCustomEditorId == vectorPng.editor' },
+  ]);
+  assert.ok(manifest.contributes.menus['webview/context'].some((m) => m.command === 'vectorPng.toggleWordWrap'), 'webview context menu entry');
+  assert.ok(manifest.contributes.menus.commandPalette.some((m) => m.command === 'vectorPng.toggleWordWrap'), 'command palette entry');
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /registerCommand\('vectorPng\.toggleWordWrap', \(\) => provider\.toggleWordWrapOnActivePanel\(\)\)/);
+  assert.match(host, /postMessage\(\{ type: 'toggleWordWrap' \}\)/);
+  assert.match(host, /this\.activeEditorPanel = panel;/, 'the provider tracks the active editor panel');
+});
+
 test('editor HTML (Issue #45) has the code toolbar and the Preview panel structure', () => {
   const html = buildEditorHtml(assets);
-  for (const id of ['code-pane', 'code-toolbar', 'tool-save', 'tool-format', 'editor',
+  for (const id of ['code-pane', 'code-toolbar', 'tool-save', 'tool-format', 'tool-wrap', 'editor',
     'preview-pane', 'preview-header', 'preview-title', 'bg-presets',
     'bg-checkerboard', 'bg-white', 'bg-black',
     'fill-row', 'fill-swatch', 'fill-text', 'fill-apply',
@@ -67,6 +104,7 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   assert.match(html, /id="tool-save" type="button">Save</);
   assert.match(html, /id="tool-format" type="button">Format</);
+  assert.match(html, /id="tool-wrap" type="button" aria-pressed="false"[^>]*>Wrap</);
   assert.match(html, /id="preview-title">Preview</);
   assert.match(html, />FILL</);
   assert.match(html, />BACKGROUND</);
@@ -95,4 +133,7 @@ test('editor CSS follows the VS Code theme variables with design-B dark fallback
   assert.match(css, /--vpe-checker: repeating-conic-gradient\(rgba\(128, 128, 128/);
   assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export PNG is the primary action');
   assert.match(css, /#tool-save \{[^}]*background: var\(--vpe-accent\)/, 'Save is the primary toolbar action');
+  assert.match(css, /--vpe-btn-border: var\(--vscode-button-border, #858585\)/, 'buttons get a visible outline colour');
+  assert.match(css, /--vpe-btn-radius: 6px/, 'buttons are rounded rectangles');
+  assert.match(css, /button \{[^}]*border: 1px solid var\(--vpe-btn-border\); border-radius: var\(--vpe-btn-radius\)/, 'every button is a rounded-rect outline');
 });
