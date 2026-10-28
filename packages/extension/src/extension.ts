@@ -2,13 +2,20 @@ import * as vscode from 'vscode';
 import { randomBytes, createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { detectPng } from './detect.ts';
-import { routeFor } from './routing.ts';
+import { routeFor, routeForFile } from './routing.ts';
 import { openModeFor } from './openMode.ts';
+import { decodeSvgText, isSvgFileName, svgDocumentSize } from './svgSource.ts';
+import { createSvgPreviewRenderer } from './svgPreview.ts';
+import { createNodeSvgSaveDeps, saveSvgTextFile, SvgSaveConflictError } from './svgSave.ts';
+import { exportSvgAsVectorPng, formatProfileDiagnostics, type ProfileDiagnostic } from './export.ts';
+import { createCoreExportDeps } from './coreExport.ts';
+import { applyNormalizedEdit, formatNormalizeErrors, formatNormalizeSummary, normalizeSourceText } from './normalize.ts';
+import { createCoreNormalizeDeps } from './coreNormalize.ts';
 import { buildNewDocumentPng } from './newDocument.ts';
 import { extractSource, type ExtractedSource } from './extract.ts';
 import { validateWebviewMessage } from './messages.ts';
 import { diagnoseSource, lineCol } from './diagnostics.ts';
-import { SAFE_SVG_ATTRIBUTES, SAFE_SVG_ELEMENTS } from './profile.ts';
+import { SAFE_SVG_ATTRIBUTES, SAFE_SVG_ELEMENTS, MAX_SVG_BYTES } from './profile.ts';
 import { parseSchemaProfile, type SchemaProfile } from './profileData.ts';
 import { readFileSync } from 'node:fs';
 import { buildEditorHtml, buildViewHtml } from './webviewHtml.ts';
@@ -26,12 +33,21 @@ import { runBounded } from '../../bridge/src/process.ts';
 
 export const VIEW_TYPE = 'vectorPng.editor';
 
+// A document is either a vector-png (its source lives inside the PNG)
+// or a plain `.svg` file (the file itself is the source, Issue #47).
+// Both share the editing model - pending/saved source, history,
+// tracker, panels; only acquisition, preview rendering and the save
+// write differ by kind.
+export type DocumentKind = 'vector-png' | 'svg';
+
 class VectorPngDocument implements vscode.CustomDocument {
   extracted: ExtractedSource | undefined;
   pendingSource: string | undefined;
   savedSource: string | undefined;
   previewMode: 'saved' | 'edited' = 'saved';
   saveSequence = 0;
+  private disposedFlag = false;
+  get isDisposed(): boolean { return this.disposedFlag; }
   // The authoritative edit history (P2-05). Created with the document.
   history: SourceHistory = new SourceHistory('');
   // External-change tracking (P2-06). Created with the document.
@@ -50,6 +66,7 @@ class VectorPngDocument implements vscode.CustomDocument {
     public readonly uri: vscode.Uri,
     public readonly width: number,
     public readonly height: number,
+    public readonly kind: DocumentKind = 'vector-png',
     // View-only documents (ordinary PNGs, Issue #46) carry no source:
     // pendingSource stays undefined, so the save path has nothing to
     // write and the document can never become dirty.
@@ -77,6 +94,7 @@ class VectorPngDocument implements vscode.CustomDocument {
     return { dispose: () => this.savedListeners.delete(listener) };
   }
   dispose(): void {
+    this.disposedFlag = true;
     this.sourceListeners.clear();
     this.savedListeners.clear();
     this.noticeListeners.clear();
@@ -98,7 +116,10 @@ type VectorPngEdit = {
 // synchronization are P2-05; external-change watching with revision
 // tokens, clean reload, dirty preservation and explicit conflict
 // resolution at save is P2-06; Python discovery and the managed
-// environment lifecycle (bridge manager) are P2-07.
+// environment lifecycle (bridge manager) are P2-07. Plain `.svg`
+// documents (open/edit/save as text, export as vector-png through the
+// Core `build` or the normalization `convert` route, and the explicit
+// undoable Normalize SVG command) are Issue #47.
 // The generated safe-svg-v1 Monaco metadata (Issue #22 Phase 2):
 // packaged under media/schemas, or read from the repo checkout during
 // development. Absent or invalid data falls back to the mirrored
@@ -124,6 +145,22 @@ function loadSchemaProfile(extensionUri: vscode.Uri): SchemaProfile | null {
 class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDocument> {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<VectorPngDocument>>();
   readonly onDidChangeCustomDocument = this.changeEmitter.event;
+  // Live documents by URI string, so commands (export) can find the
+  // open document - and its possibly unsaved source - for a file.
+  private readonly documents = new Map<string, VectorPngDocument>();
+
+  private registerDocument(document: VectorPngDocument): void {
+    this.documents.set(document.uri.toString(), document);
+  }
+
+  findOpenDocument(uri: vscode.Uri): VectorPngDocument | undefined {
+    const document = this.documents.get(uri.toString());
+    if (document && document.isDisposed) {
+      this.documents.delete(uri.toString());
+      return undefined;
+    }
+    return document;
+  }
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -141,10 +178,11 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
 
   async openCustomDocument(uri: vscode.Uri): Promise<VectorPngDocument> {
     const bytes = await vscode.workspace.fs.readFile(uri);
+    if (isSvgFileName(uri.path.split('/').pop() ?? '')) return this.openSvgDocument(uri, bytes);
     const openMode = openModeFor(detectPng(bytes));
     if (openMode.mode === 'reject')
       throw new Error(`Not a valid vector-png file: ${openMode.diagnostic}`);
-    const document = new VectorPngDocument(uri, openMode.width, openMode.height, openMode.mode === 'view');
+    const document = new VectorPngDocument(uri, openMode.width, openMode.height, 'vector-png', openMode.mode === 'view');
     if (document.viewOnly) {
       // Issue #46: an ordinary PNG opens in view mode. No source is
       // extracted or fabricated, no watcher/history/tracker is set up,
@@ -158,6 +196,27 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     document.history = new SourceHistory(document.extracted.text);
     document.tracker = new ExternalChangeTracker(createHash('sha256').update(bytes).digest('hex'));
     this.watchDocument(document);
+    this.registerDocument(document);
+    return document;
+  }
+
+  // A plain `.svg` file opens as its own source text. Display is never
+  // blocked by safe-svg-v1 validation: the only refusals are the
+  // editor's resource limits (byte cap, valid UTF-8), shared with the
+  // PNG source path.
+  private openSvgDocument(uri: vscode.Uri, bytes: Uint8Array): VectorPngDocument {
+    if (bytes.length > MAX_SVG_BYTES)
+      throw new Error(`This SVG file exceeds the editor source limit of ${MAX_SVG_BYTES} bytes`);
+    const text = decodeSvgText(bytes);
+    if (text === null) throw new Error('This SVG file is not valid UTF-8 text');
+    const size = svgDocumentSize(text);
+    const document = new VectorPngDocument(uri, size.width, size.height, 'svg');
+    document.pendingSource = text;
+    document.savedSource = text;
+    document.history = new SourceHistory(text);
+    document.tracker = new ExternalChangeTracker(createHash('sha256').update(bytes).digest('hex'));
+    this.watchDocument(document);
+    this.registerDocument(document);
     return document;
   }
 
@@ -183,6 +242,16 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   private async reloadFromDisk(document: VectorPngDocument): Promise<boolean> {
     const state = await this.readDiskState(document);
     if (!state) return false;
+    if (document.kind === 'svg') {
+      const text = decodeSvgText(state.bytes);
+      if (text === null) return false;
+      document.savedSource = text;
+      document.history.reset(text);
+      document.tracker.noteReloaded(state.sha);
+      document.syncSource(text);
+      document.notifySaved();
+      return true;
+    }
     let extracted: ExtractedSource;
     try {
       const detection = detectPng(state.bytes);
@@ -205,8 +274,14 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     if (!state) { void this.handleDiskDelete(document); return; }
     const dirty = document.history.isDirty(document.savedSource ?? '');
     // Never reload unchecked content: an unparsable change conflicts.
+    // For an SVG document "parsable" means decodable source text - the
+    // profile never gates display, so conformance is not checked here.
     let parseable = false;
-    try { parseable = detectPng(state.bytes).kind === 'vector-png'; } catch { parseable = false; }
+    try {
+      parseable = document.kind === 'svg'
+        ? decodeSvgText(state.bytes) !== null
+        : detectPng(state.bytes).kind === 'vector-png';
+    } catch { parseable = false; }
     const decision = parseable
       ? document.tracker.observe(state.sha, dirty)
       : document.tracker.observeUnreadable();
@@ -232,15 +307,22 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   async openCustomDocumentBackup(backupId: string): Promise<VectorPngDocument> {
     const backupUri = vscode.Uri.parse(backupId);
     const sidecar = await readBackup(backupUri.fsPath);
-    const document = await this.openCustomDocument(backupUri);
+    // The backup destination carries no meaningful file name, so an
+    // SVG backup is recognized through its sidecar's original URI.
+    const svgBackup = sidecar !== undefined
+      && isSvgFileName(vscode.Uri.parse(sidecar.originalUri).path.split('/').pop() ?? '');
+    const document = svgBackup
+      ? this.openSvgDocument(backupUri, await vscode.workspace.fs.readFile(backupUri))
+      : await this.openCustomDocument(backupUri);
     if (sidecar) {
       // Restore with the unsaved edits intact and byte-exact; the
       // history restarts from the restored state (P2-05).
-      const restored = new VectorPngDocument(vscode.Uri.parse(sidecar.originalUri), document.width, document.height);
+      const restored = new VectorPngDocument(vscode.Uri.parse(sidecar.originalUri), document.width, document.height, document.kind);
       restored.extracted = document.extracted;
       restored.savedSource = sidecar.savedSource;
       restored.pendingSource = sidecar.source;
       restored.history = new SourceHistory(sidecar.source);
+      this.registerDocument(restored);
       return restored;
     }
     return document;
@@ -287,14 +369,22 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     panel.webview.html = buildEditorHtml(assets);
 
     const documentKey = createHash('sha256').update(document.uri.toString()).digest('hex').slice(0, 16);
+    // Preview rendering differs by kind: a vector-png's edited source
+    // renders through the Core (which validates first), while a plain
+    // SVG renders as-is from a private file - the Core preview path
+    // cannot show a non-conforming SVG at all, and display is never
+    // blocked by the profile (Issue #47).
+    const renderer = document.kind === 'svg'
+      ? createSvgPreviewRenderer({ previewDir: previewDirUri.fsPath, documentKey })
+      : createCorePreviewRenderer({
+          pythonPath: await this.corePythonPath(),
+          previewDir: previewDirUri.fsPath,
+          width: document.width,
+          height: document.height,
+          documentKey,
+        });
     const preview = new PreviewController(
-      createCorePreviewRenderer({
-        pythonPath: await this.corePythonPath(),
-        previewDir: previewDirUri.fsPath,
-        width: document.width,
-        height: document.height,
-        documentKey,
-      }),
+      renderer,
       (event) => {
         if (event.type === 'rendered') {
           const uri = panel.webview.asWebviewUri(vscode.Uri.file(join(event.imagePath)))
@@ -323,6 +413,14 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const noticeSubscription = document.onNotice((text) => {
       void panel.webview.postMessage({ type: 'notice', text });
     });
+    // Menu enablement for kind-specific commands (Normalize SVG is
+    // .svg-only): track the active panel's document kind as context.
+    const updateKindContext = () => {
+      if (panel.active)
+        void vscode.commands.executeCommand('setContext', 'vectorPng.documentIsSvg', document.kind === 'svg');
+    };
+    const viewStateSubscription = panel.onDidChangeViewState(updateKindContext);
+    updateKindContext();
     // Show the Core-rendered edited preview for the untouched source too;
     // the pane still opens on the saved raster and never auto-switches.
     if (document.pendingSource !== undefined) preview.schedule(document.pendingSource, 0);
@@ -336,7 +434,9 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         void panel.webview.postMessage({
           type: 'init',
           previewUri: savedUri(),
-          meta: `${document.width} x ${document.height} vector-png`,
+          meta: document.kind === 'svg'
+            ? `${document.width} x ${document.height} SVG source`
+            : `${document.width} x ${document.height} vector-png`,
           source: document.pendingSource ?? '',
           elements: schemaProfile?.elements ?? SAFE_SVG_ELEMENTS,
           attributes: schemaProfile?.attributes ?? SAFE_SVG_ATTRIBUTES,
@@ -375,6 +475,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       syncSubscription.dispose();
       savedSubscription.dispose();
       noticeSubscription.dispose();
+      viewStateSubscription.dispose();
       preview.dispose();
     });
   }
@@ -382,6 +483,10 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   async saveCustomDocument(document: VectorPngDocument, cancellation: vscode.CancellationToken): Promise<void> {
     const source = document.pendingSource;
     if (source === undefined) throw new Error('Nothing to save');
+    // Set when the user explicitly resolved a conflict by overwriting:
+    // the SVG text save then skips its revision-token guard (the PNG
+    // save re-reads the token through the Core either way).
+    let forceOverwrite = false;
     // P2-06: a known external conflict must be resolved explicitly -
     // a plain save never silently overwrites the external version.
     if (document.tracker.isConflicted && !document.tracker.isDeleted) {
@@ -393,30 +498,45 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         throw new Error('Could not reload the changed file; your edits are preserved');
       }
       if (choice === 'Save As...') {
-        const target = await vscode.window.showSaveDialog({ filters: { 'Vector PNG': ['png'] }, saveLabel: 'Save As' });
+        const target = await vscode.window.showSaveDialog({
+          filters: document.kind === 'svg' ? { 'SVG': ['svg'] } : { 'Vector PNG': ['png'] },
+          saveLabel: 'Save As',
+        });
         if (!target) throw new Error('Save cancelled');
         await this.saveCustomDocumentAs(document, target, cancellation);
         return;
       }
       if (choice !== 'Overwrite the external change') throw new Error('Save cancelled');
       document.tracker.resolveOverwrite();
+      forceOverwrite = true;
     }
-    const deps = createCoreSaveDeps(await this.corePythonPath());
     try {
-      if (document.tracker.isDeleted) {
-        // Recreate a file deleted on disk from the preserved buffer.
-        await saveAs(deps, document.uri.fsPath, {
-          source, width: document.width, height: document.height,
-          isCancelled: () => cancellation.isCancellationRequested,
-        });
+      if (document.kind === 'svg') {
+        // The .svg is its own source file: a plain UTF-8 text write,
+        // guarded by the revision token unless the file was deleted
+        // (recreate it) or the user resolved a conflict by overwriting.
+        const expected = document.tracker.isDeleted || forceOverwrite ? undefined : document.tracker.agreedSha;
+        await saveSvgTextFile(createNodeSvgSaveDeps(), document.uri.fsPath, source, expected);
       } else {
-        await saveInPlace(deps, document.uri.fsPath, {
-          source, width: document.width, height: document.height,
-          isCancelled: () => cancellation.isCancellationRequested,
-        });
+        const deps = createCoreSaveDeps(await this.corePythonPath());
+        if (document.tracker.isDeleted) {
+          // Recreate a file deleted on disk from the preserved buffer.
+          await saveAs(deps, document.uri.fsPath, {
+            source, width: document.width, height: document.height,
+            isCancelled: () => cancellation.isCancellationRequested,
+          });
+        } else {
+          await saveInPlace(deps, document.uri.fsPath, {
+            source, width: document.width, height: document.height,
+            isCancelled: () => cancellation.isCancellationRequested,
+          });
+        }
       }
     } catch (error) {
-      void vscode.window.showErrorMessage(`Vector PNG save failed: ${error instanceof Error ? error.message : String(error)}`);
+      const label = document.kind === 'svg' && error instanceof SvgSaveConflictError
+        ? 'Vector PNG save conflict'
+        : 'Vector PNG save failed';
+      void vscode.window.showErrorMessage(`${label}: ${error instanceof Error ? error.message : String(error)}`);
       throw error; // Throwing keeps the document dirty and the buffer intact.
     }
     document.savedSource = source;
@@ -429,10 +549,15 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const source = document.pendingSource;
     if (source === undefined) throw new Error('Nothing to save');
     try {
-      await saveAs(createCoreSaveDeps(await this.corePythonPath()), targetUri.fsPath, {
-        source, width: document.width, height: document.height,
-        isCancelled: () => cancellation.isCancellationRequested,
-      });
+      if (document.kind === 'svg') {
+        // The Save As dialog already confirmed any replacement.
+        await saveSvgTextFile(createNodeSvgSaveDeps(), targetUri.fsPath, source, undefined);
+      } else {
+        await saveAs(createCoreSaveDeps(await this.corePythonPath()), targetUri.fsPath, {
+          source, width: document.width, height: document.height,
+          isCancelled: () => cancellation.isCancellationRequested,
+        });
+      }
     } catch (error) {
       void vscode.window.showErrorMessage(`Vector PNG Save As failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
@@ -446,6 +571,16 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     // revert is a no-op rather than an extraction failure (Issue #46).
     if (document.viewOnly) return;
     const bytes = await vscode.workspace.fs.readFile(document.uri);
+    if (document.kind === 'svg') {
+      const text = decodeSvgText(bytes);
+      if (text === null) throw new Error('The file on disk is not valid UTF-8 text');
+      document.savedSource = text;
+      document.history.reset(text);
+      document.tracker.noteReloaded(createHash('sha256').update(bytes).digest('hex'));
+      document.syncSource(text);
+      document.notifySaved();
+      return;
+    }
     const extracted = extractSource(bytes);
     document.extracted = extracted;
     document.savedSource = extracted.text;
@@ -467,6 +602,182 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       delete: async () => deleteBackup(destination.fsPath),
     };
   }
+
+  // `Vector PNG: Export as Vector PNG` (Issue #47). The exported
+  // source is the open document's current (possibly unsaved) source,
+  // or the file's disk content when no editor is open for it; the
+  // source file itself is never modified by an export.
+  async exportAsVectorPng(target?: vscode.Uri): Promise<void> {
+    const uri = target
+      ?? this.activeCustomEditorUri()
+      ?? vscode.window.activeTextEditor?.document.uri
+      ?? (await vscode.window.showOpenDialog({
+        canSelectMany: false,
+        filters: { 'SVG images': ['svg'] },
+        openLabel: 'Export as Vector PNG',
+      }))?.[0];
+    if (!uri) return;
+    const fileName = uri.path.split('/').pop() ?? uri.path;
+    if (!isSvgFileName(fileName)) {
+      void vscode.window.showErrorMessage(`Vector PNG export: ${fileName} is not an .svg file`);
+      return;
+    }
+    const open = this.findOpenDocument(uri);
+    let source: string;
+    let width: number;
+    let height: number;
+    if (open?.kind === 'svg') {
+      source = open.pendingSource ?? open.savedSource ?? '';
+      width = open.width;
+      height = open.height;
+    } else {
+      let bytes: Uint8Array;
+      try {
+        bytes = await vscode.workspace.fs.readFile(uri);
+      } catch {
+        void vscode.window.showErrorMessage(`Vector PNG export: could not read ${fileName}`);
+        return;
+      }
+      const text = decodeSvgText(bytes);
+      if (text === null) {
+        void vscode.window.showErrorMessage(`Vector PNG export: ${fileName} is not valid UTF-8 text within the editor source limit`);
+        return;
+      }
+      source = text;
+      const size = svgDocumentSize(text);
+      width = size.width;
+      height = size.height;
+    }
+    const targetPath = uri.fsPath.replace(/\.svg$/i, '.png');
+    const deps = {
+      ...createCoreExportDeps(await this.corePythonPath()),
+      confirmOverwrite: async (path: string): Promise<boolean> => {
+        const name = path.split('/').pop() ?? path;
+        const choice = await vscode.window.showWarningMessage(
+          `Vector PNG export: ${name} already exists. Replace it?`,
+          { modal: true }, 'Overwrite');
+        return choice === 'Overwrite';
+      },
+      presentDiagnostics: async (diagnostics: ProfileDiagnostic[]): Promise<'normalize' | 'cancel'> => {
+        const summary = `${fileName} is not valid safe-svg-v1 (${diagnostics.length} diagnostic(s)). Nothing was written.`;
+        const choice = await vscode.window.showErrorMessage(
+          `Vector PNG export: ${summary}`,
+          'Export via normalization', 'Show diagnostics');
+        if (choice === 'Export via normalization') return 'normalize';
+        if (choice === 'Show diagnostics') {
+          const document = await vscode.workspace.openTextDocument({
+            language: 'text',
+            content: `safe-svg-v1 diagnostics for ${fileName}:\n\n${formatProfileDiagnostics(diagnostics)}\n`,
+          });
+          await vscode.window.showTextDocument(document, { preview: true });
+          const again = await vscode.window.showErrorMessage(
+            'Vector PNG export: export this file through normalization instead? The source file is not modified.',
+            'Export via normalization');
+          return again === 'Export via normalization' ? 'normalize' : 'cancel';
+        }
+        return 'cancel';
+      },
+    };
+    const result = await exportSvgAsVectorPng(deps, { source, targetPath, width, height });
+    if (result.status === 'exported') {
+      const via = result.via === 'convert' ? ' (via normalization)' : '';
+      void vscode.window.showInformationMessage(`Vector PNG exported${via}: ${result.targetPath}`);
+      if (result.warnings.length > 0) {
+        const shown = result.warnings.slice(0, 10).join('\n');
+        const more = result.warnings.length > 10 ? `\n…and ${result.warnings.length - 10} more` : '';
+        void vscode.window.showWarningMessage(`Normalization warnings for ${fileName}:\n${shown}${more}`);
+      }
+    } else if (result.status === 'cancelled-overwrite') {
+      void vscode.window.showInformationMessage('Vector PNG export cancelled: the existing PNG was left unchanged.');
+    } else if (result.status === 'failed') {
+      void vscode.window.showErrorMessage(`Vector PNG export failed (${result.stage}): ${result.message}`);
+    }
+    // status 'invalid': the diagnostics were already presented by the
+    // presentDiagnostics callback; nothing further to report.
+  }
+
+  private activeCustomEditorUri(): vscode.Uri | undefined {
+    const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    return input instanceof vscode.TabInputCustom && input.viewType === VIEW_TYPE ? input.uri : undefined;
+  }
+
+  // `Vector PNG: Normalize SVG` (Issue #47 follow-up). An explicit,
+  // deliberate operation on an open `.svg` document - never a step of
+  // open, save or export. An unopened `.svg` is opened in the editor
+  // first; files are never rewritten behind the editor's back. The
+  // normalized source lands as an ordinary undoable edit (dirty until
+  // the user saves), so the document model - history, conflict
+  // protection, save flow - is never bypassed.
+  async normalizeSvg(target?: vscode.Uri): Promise<void> {
+    const uri = target
+      ?? this.activeCustomEditorUri()
+      ?? vscode.window.activeTextEditor?.document.uri;
+    if (!uri) {
+      void vscode.window.showInformationMessage('Vector PNG: open an SVG document in the editor to normalize it.');
+      return;
+    }
+    let document = this.findOpenDocument(uri);
+    if (!document) {
+      if (!isSvgFileName(uri.path.split('/').pop() ?? '')) {
+        void vscode.window.showInformationMessage('Vector PNG: Normalize SVG applies to .svg documents in this editor.');
+        return;
+      }
+      await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
+      document = this.findOpenDocument(uri);
+      if (!document) {
+        void vscode.window.showErrorMessage('Vector PNG: could not open the SVG document to normalize it.');
+        return;
+      }
+    }
+    if (document.kind !== 'svg') {
+      void vscode.window.showInformationMessage('Vector PNG: Normalize SVG applies to .svg documents; this is a vector-png document.');
+      return;
+    }
+    const source = document.pendingSource ?? document.savedSource ?? '';
+    const result = await normalizeSourceText(createCoreNormalizeDeps(await this.corePythonPath()), source);
+    if (result.status === 'already-normalized') {
+      void vscode.window.showInformationMessage('Vector PNG: this SVG is already in normalized safe-svg-v1 form; no changes were made.');
+      return;
+    }
+    if (result.status === 'failed') {
+      const headline = `Vector PNG normalize failed (${result.code}): ${result.message}. The document was not changed.`;
+      if (result.errors.length === 0) {
+        void vscode.window.showErrorMessage(headline);
+        return;
+      }
+      const choice = await vscode.window.showErrorMessage(headline, 'Show diagnostics');
+      if (choice === 'Show diagnostics') {
+        const doc = await vscode.workspace.openTextDocument({
+          language: 'text',
+          content: `Normalization failure for ${uri.path.split('/').pop() ?? 'document'}:\n\n${formatNormalizeErrors(result.errors)}\n`,
+        });
+        await vscode.window.showTextDocument(doc, { preview: true });
+      }
+      return;
+    }
+    if (!applyNormalizedEdit(document, result.source)) {
+      void vscode.window.showInformationMessage('Vector PNG: this SVG is already in normalized safe-svg-v1 form; no changes were made.');
+      return;
+    }
+    // Fire the edit event so VS Code's undo stack tracks the change;
+    // the closures only move the history pointer, like webview edits.
+    const applyPointer = (source: string | undefined) => {
+      if (source !== undefined) document.syncSource(source);
+    };
+    const edit: VectorPngEdit = {
+      label: 'Normalize SVG',
+      undo: async () => applyPointer(document.history.undo()),
+      redo: async () => applyPointer(document.history.redo()),
+    };
+    this.changeEmitter.fire({ document, ...edit });
+    void vscode.window.showInformationMessage(
+      `Vector PNG: SVG normalized (${formatNormalizeSummary(result.summary)}). The change is unsaved and can be undone.`);
+    if (result.summary.losses.length > 0) {
+      const shown = result.summary.losses.slice(0, 10).join('\n');
+      const more = result.summary.losses.length > 10 ? `\n…and ${result.summary.losses.length - 10} more` : '';
+      void vscode.window.showWarningMessage(`Normalization recorded losses:\n${shown}${more}`);
+    }
+  }
 }
 
 
@@ -474,12 +785,12 @@ async function openInEditor(target?: vscode.Uri): Promise<void> {
   const uri = target ?? vscode.window.activeTextEditor?.document.uri
     ?? (await vscode.window.showOpenDialog({
       canSelectMany: false,
-      filters: { 'PNG images': ['png'] },
+      filters: { 'PNG and SVG images': ['png', 'svg'] },
       openLabel: 'Open in Vector PNG Editor',
     }))?.[0];
   if (!uri) return;
   const bytes = await vscode.workspace.fs.readFile(uri);
-  const route = routeFor(detectPng(bytes), uri.path.split('/').pop() ?? uri.path);
+  const route = routeForFile(detectPng(bytes), uri.path.split('/').pop() ?? uri.path);
   if (route.action === 'open-custom-editor') {
     await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
   } else if (route.action === 'open-default-viewer') {
@@ -567,12 +878,15 @@ async function environmentStatus(managedRoot: string): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   const managedRoot = join(context.globalStorageUri.fsPath, 'managed-env');
+  const provider = new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri, context.extensionPath, managedRoot);
   context.subscriptions.push(
-    vscode.window.registerCustomEditorProvider(VIEW_TYPE, new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri, context.extensionPath, managedRoot), {
+    vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       webviewOptions: { retainContextWhenHidden: true },
       supportsMultipleEditorsPerDocument: true,
     }),
     vscode.commands.registerCommand('vectorPng.openInEditor', openInEditor),
+    vscode.commands.registerCommand('vectorPng.exportAsVectorPng', (target?: vscode.Uri) => provider.exportAsVectorPng(target)),
+    vscode.commands.registerCommand('vectorPng.normalizeSvg', (target?: vscode.Uri) => provider.normalizeSvg(target)),
     vscode.commands.registerCommand('vectorPng.newDocument', newDocument),
     vscode.commands.registerCommand('vectorPng.setupEnvironment', () => setupEnvironment(context, managedRoot)),
     vscode.commands.registerCommand('vectorPng.environmentStatus', () => environmentStatus(managedRoot)),

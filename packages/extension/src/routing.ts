@@ -20,3 +20,11 @@ export function routeFor(detection: Detection, fileName: string): Route {
       return { action: 'show-diagnostic', message: `${fileName} is not a PNG file: ${detection.diagnostic}` };
   }
 }
+
+// File-name aware routing for the open command (Issue #47): a `.svg`
+// file is a source document for the custom editor regardless of what
+// PNG detection sees in its bytes; everything else follows routeFor.
+export function routeForFile(detection: Detection, fileName: string): Route {
+  if (/\.svg$/i.test(fileName)) return { action: 'open-custom-editor' };
+  return routeFor(detection, fileName);
+}
