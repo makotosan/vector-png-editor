@@ -55,10 +55,10 @@ test('Monaco follows the VS Code colour theme (Issue #45, design B)', async () =
   assert.match(js, /MutationObserver\(syncMonacoTheme\)/);
 });
 
-test('word wrap toggles with Alt+Z and the Wrap button, persisted per panel (Issue #45)', async () => {
+test('word wrap toggles via the host command message and the Wrap button, persisted per panel (Issue #45)', async () => {
   const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
-  assert.match(js, /event\.code !== 'KeyZ'/);
-  assert.match(js, /addEventListener\('keydown', \(event\) => \{[\s\S]*?\}, true\)/, 'capture-phase Alt+Z listener');
+  assert.match(js, /message\.type === 'toggleWordWrap'\) \{\n    toggleWordWrap\(\);/, 'the host command message toggles wrap');
+  assert.ok(!js.includes("'KeyZ'"), 'Alt+Z is owned by the workbench keybinding, not a page listener');
   assert.match(js, /const wrapButton = document\.getElementById\('tool-wrap'\);\nif \(wrapButton\) wrapButton\.addEventListener\('click', toggleWordWrap\)/, 'Wrap wiring is null-safe for pages retained across an upgrade');
   assert.match(js, /if \(button\) button\.setAttribute\('aria-pressed', String\(wordWrapOn\)\)/);
   assert.match(js, /wordWrap: wordWrapOn \? 'on' : 'off'/, 'editor creation takes the persisted choice');
@@ -67,6 +67,22 @@ test('word wrap toggles with Alt+Z and the Wrap button, persisted per panel (Iss
   assert.match(js, /persistedPanel\.wordWrap === true/);
   const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
   assert.match(css, /#tool-wrap\[aria-pressed="true"\]/);
+});
+
+test('Toggle Word Wrap is a workbench command with an Alt+Z keybinding (Issue #45)', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  const command = manifest.contributes.commands.find((c) => c.command === 'vectorPng.toggleWordWrap');
+  assert.ok(command, 'command contributed');
+  assert.equal(command.title, 'Vector PNG: Toggle Word Wrap');
+  assert.deepEqual(manifest.contributes.keybindings, [
+    { command: 'vectorPng.toggleWordWrap', key: 'alt+z', when: 'activeCustomEditorId == vectorPng.editor' },
+  ]);
+  assert.ok(manifest.contributes.menus['webview/context'].some((m) => m.command === 'vectorPng.toggleWordWrap'), 'webview context menu entry');
+  assert.ok(manifest.contributes.menus.commandPalette.some((m) => m.command === 'vectorPng.toggleWordWrap'), 'command palette entry');
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /registerCommand\('vectorPng\.toggleWordWrap', \(\) => provider\.toggleWordWrapOnActivePanel\(\)\)/);
+  assert.match(host, /postMessage\(\{ type: 'toggleWordWrap' \}\)/);
+  assert.match(host, /this\.activeEditorPanel = panel;/, 'the provider tracks the active editor panel');
 });
 
 test('editor HTML (Issue #45) has the code toolbar and the Preview panel structure', () => {

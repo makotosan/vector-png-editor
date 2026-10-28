@@ -20,7 +20,8 @@
     "onCommand:vectorPng.newDocument",
     "onCommand:vectorPng.setupEnvironment",
     "onCommand:vectorPng.environmentStatus",
-    "onCommand:vectorPng.rollbackEnvironment"
+    "onCommand:vectorPng.rollbackEnvironment",
+    "onCommand:vectorPng.toggleWordWrap"
   ],
   "main": "./out/extension.js",
   "scripts": {
@@ -81,6 +82,17 @@
       {
         "command": "vectorPng.rollbackEnvironment",
         "title": "Vector PNG: Roll Back Python Environment"
+      },
+      {
+        "command": "vectorPng.toggleWordWrap",
+        "title": "Vector PNG: Toggle Word Wrap"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "vectorPng.toggleWordWrap",
+        "key": "alt+z",
+        "when": "activeCustomEditorId == vectorPng.editor"
       }
     ],
     "menus": {
@@ -113,6 +125,13 @@
           "group": "navigation"
         }
       ],
+      "webview/context": [
+        {
+          "command": "vectorPng.toggleWordWrap",
+          "when": "activeCustomEditorId == vectorPng.editor",
+          "group": "navigation"
+        }
+      ],
       "commandPalette": [
         {
           "command": "vectorPng.openInEditor"
@@ -126,6 +145,10 @@
         },
         {
           "command": "vectorPng.newDocument"
+        },
+        {
+          "command": "vectorPng.toggleWordWrap",
+          "when": "activeCustomEditorId == vectorPng.editor"
         }
       ]
     },
