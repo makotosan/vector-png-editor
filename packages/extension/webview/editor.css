@@ -99,6 +99,7 @@ input[aria-invalid="true"] { outline: 1px solid var(--vpe-error); outline-offset
 #preview-toggle button:first-child { border-radius: var(--vpe-radius) 0 0 var(--vpe-radius); }
 #preview-toggle button:last-child { border-radius: 0 var(--vpe-radius) var(--vpe-radius) 0; }
 #preview-toggle button[aria-pressed="true"] { background: var(--vpe-accent); color: var(--vpe-accent-fg); }
+#tool-wrap[aria-pressed="true"] { background: var(--vpe-accent); color: var(--vpe-accent-fg); }
 #preview-status { min-height: 1em; color: var(--vpe-fg-dim); font-size: 12px; }
 #preview-area {
   flex: 1; min-height: 120px; overflow: auto;

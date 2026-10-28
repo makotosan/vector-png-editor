@@ -41,6 +41,7 @@ export function buildEditorHtml(assets: WebviewAssets): string {
     <div id="code-toolbar" role="toolbar" aria-label="Source actions">
       <button id="tool-save" type="button">Save</button>
       <button id="tool-format" type="button">Format</button>
+      <button id="tool-wrap" type="button" aria-pressed="false" title="Toggle word wrap (Alt+Z)">Wrap</button>
       <span id="meta">Loading…</span>
     </div>
     <div id="editor"></div>
