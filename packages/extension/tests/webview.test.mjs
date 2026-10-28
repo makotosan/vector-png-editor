@@ -59,7 +59,8 @@ test('word wrap toggles with Alt+Z and the Wrap button, persisted per panel (Iss
   const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
   assert.match(js, /event\.code !== 'KeyZ'/);
   assert.match(js, /addEventListener\('keydown', \(event\) => \{[\s\S]*?\}, true\)/, 'capture-phase Alt+Z listener');
-  assert.match(js, /getElementById\('tool-wrap'\)\.addEventListener\('click', toggleWordWrap\)/);
+  assert.match(js, /const wrapButton = document\.getElementById\('tool-wrap'\);\nif \(wrapButton\) wrapButton\.addEventListener\('click', toggleWordWrap\)/, 'Wrap wiring is null-safe for pages retained across an upgrade');
+  assert.match(js, /if \(button\) button\.setAttribute\('aria-pressed', String\(wordWrapOn\)\)/);
   assert.match(js, /wordWrap: wordWrapOn \? 'on' : 'off'/, 'editor creation takes the persisted choice');
   assert.match(js, /editor\.updateOptions\(\{ wordWrap: wordWrapOn \? 'on' : 'off' \}\)/);
   assert.match(js, /wordWrap: wordWrapOn,/, 'the choice is part of the persisted panel state');

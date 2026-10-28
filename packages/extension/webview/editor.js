@@ -84,7 +84,10 @@ function persistPanelState() {
   });
 }
 function refreshWordWrap() {
-  document.getElementById('tool-wrap').setAttribute('aria-pressed', String(wordWrapOn));
+  // Null-safe: a webview page retained across an extension upgrade
+  // can predate the Wrap button; the script must degrade, not die.
+  const button = document.getElementById('tool-wrap');
+  if (button) button.setAttribute('aria-pressed', String(wordWrapOn));
   if (editor) editor.updateOptions({ wordWrap: wordWrapOn ? 'on' : 'off' });
 }
 function toggleWordWrap() {
@@ -92,7 +95,8 @@ function toggleWordWrap() {
   refreshWordWrap();
   persistPanelState();
 }
-document.getElementById('tool-wrap').addEventListener('click', toggleWordWrap);
+const wrapButton = document.getElementById('tool-wrap');
+if (wrapButton) wrapButton.addEventListener('click', toggleWordWrap);
 // Capture phase, so the toggle fires exactly once even when Monaco
 // has focus (and regardless of any binding Monaco itself may have);
 // holding the keys down does not strobe the setting.
