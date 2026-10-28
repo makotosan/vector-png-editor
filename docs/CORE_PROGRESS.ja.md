@@ -45,3 +45,17 @@ Core 0.1.0.dev3は全6コマンド向けの厳密な上限付きprotocol-1 stdin
 ## 専用Python環境管理の追加
 
 TypeScript管理処理で独立venvを作成し、信頼済みwheel／lock digestとPython範囲を検査し、requirements.lockのアプリ依存9個を固定導入し、venv identity・package閉包・依存・実描画を検証して、active／previous pointerをatomicに切り替えます。旧環境と失敗環境を保持し、健全性を条件に切り戻します。runManagedCoreはPython／pip変数を除去したready interpreterを選びます。offline／network選択、API契約、復旧の制限は[INSTALL.ja.md](INSTALL.ja.md)を参照してください。ローカルWindowsでNodeテスト全28件がskipなしで115.63秒で合格しました。実際の専用venv統合、offline導入失敗、不正・不健全wheel、取消、並行setup、周囲の不正な変数、切り戻し、active pointer・原文の正確な保持を含みます。Core wheelは0.1.0.dev3でCore原文は変更せず、先のPython 116件は過去の基準根拠です。今回追加分のhosted CIは未完了で、OS／Python全9組でそれらのCoreテストと実際の管理テストも実行します。P1-04／P2-07は一部実装で、interpreter自動検出・native setup UI、release manifest、成果物・native hash、完全なrenderer resource・取消制御、VS Code連携、実機受け入れは残ります。README、bridge、導入、受け入れ、進捗の日英ペア全文について、節の意味、識別子、版、上限、例外条件、参照先、失敗・有効化の境界を照合しました。PR #25はマージ済みです。
+
+## CIと保護されたPR統合 — P3-03
+
+`main` の必須チェック登録は3つの名前付きチェックで、各層を担い、パスフィルターはどこにもありません（全てのpull requestで3つ全てが動きます）。
+
+| 必須チェック | ワークフロー | 範囲 |
+| --- | --- | --- |
+| `core-check` | Core tests | 3 OS × Python 3.11-3.13行列全体のゲートジョブ：Core pytest（parser、CLI、書き込み、notices）、wheel／sdistビルド、bridge＋管理下環境テスト、ツリー外wheel検査、そして `packages/core/tests/test_codex_integration.py` 経由でP3-01 CLI統合スイートを全セルで実行 |
+| `planning-check` | Planning checks | `tools/check_planning.py`：日英文書ペア、pin、リンク |
+| `extension-check` | Extension tests | 拡張の型検査と単体テスト |
+
+skipされたジョブが必須テストを隠すことはありません。行列のゲートジョブは `if: always()` で動き、行列の結果がちょうど `success` の場合にのみ成功します（失敗・取消・skipは全てゲートを失敗させます）。他の2ワークフローは単一ジョブで、pull requestでskipされうる条件もパスフィルターもありません。
+
+強制の証跡：作業は `codex/*` 機能ブランチからpull request経由でのみ `main` に入ります（本系列では#27〜#36）。2026-10-28、PR #29には失敗したPlanningチェックが2件あり、GitHubはそのPRを `blocked` と表示し、フォローアップコミットでチェックが合格するまでマージは実行できず、その後に状態は `clean` となってマージが進みました。これは、失敗したPRが拒否され、緑のPRが統合可能になることを実際に観測した事例です。保護 *設定* 自体はリポジトリー設定の中にあり、ここで使う自動化からは見えません。本登録は、設定を一目で照合できるよう、必須とすべきチェックを正確に名指しするものであり、上記の挙動証跡が、必須チェックが実際にマージをゲートしていることを示します。実機受入はP3-02として残り、これらのいずれによっても置き換えられません。
