@@ -34,6 +34,7 @@ def main(argv=None):
     validate.add_argument("--width", type=int, default=1024)
     validate.add_argument("--height", type=int, default=1024)
     validate.add_argument("--syntax-only", action="store_true", help="Skip rendering; explicitly report render not checked")
+    validate.add_argument("--profile", choices=["safe-svg-v1"], help="Strict schema-profile gate with structured diagnostics (Issue #22)")
     verify = commands.add_parser("verify")
     verify.add_argument("png", type=Path)
     for name, source_arg in (("build", "svg"), ("rebuild", "png")):
@@ -76,6 +77,13 @@ def main(argv=None):
             source = getattr(args, "source", None)
             if source is None:
                 source = bounded_read(args.svg, MAX_SVG)
+            if getattr(args, "profile", None):
+                from .profile_check import check_profile
+                diagnostics = check_profile(source, strict_structure=True)
+                if diagnostics:
+                    raise CoreError("unsupported-profile",
+                                    f"{len(diagnostics)} safe-svg-v1 diagnostic(s); first: {diagnostics[0]['message']}",
+                                    {"diagnostics": diagnostics})
             result = validate_source(source) if args.syntax_only else validate_render(source, args.width, args.height)
         envelope.update(ok=True, result=result)
     except CoreError as exc:
