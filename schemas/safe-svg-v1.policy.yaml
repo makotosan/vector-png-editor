@@ -1,0 +1,129 @@
+# safe-svg-v1 policy: the single machine-readable normative data for
+# the profile, per Issue #22 (v1.2). Allowlists and value rules mirror
+# the pinned specification (makotosan/vector-png-spec@8238ebda,
+# profiles/safe-svg-v1.md, draft 0.1) and the Core implementation
+# (packages/core/src/vector_png_editor/_backend.py); a Core test
+# enforces that they never drift. Content models are the strict
+# authoring layer used by the generated Relax NG schema and by
+# `validate --profile safe-svg-v1`; the Core acceptance path itself
+# imposes no parent-child rules (see docs/SAFE_SVG_V1.md).
+profile: safe-svg-v1
+profile_version: 1.0.0
+spec_repository: makotosan/vector-png-spec
+spec_revision: 8238ebdaa136f448affa53133b99ee5afde5765a
+spec_document: profiles/safe-svg-v1.md
+namespace: http://www.w3.org/2000/svg
+max_bytes: 1000000
+max_elements: 5000
+max_depth: 32
+max_attribute_length: 100000
+id_pattern: '[A-Za-z_][A-Za-z0-9_.-]*'
+url_pattern: 'url\(#[A-Za-z_][A-Za-z0-9_.-]*\)'
+forbidden_value_characters: '\@{};<>'
+elements:
+  - svg
+  - g
+  - defs
+  - title
+  - desc
+  - path
+  - rect
+  - circle
+  - ellipse
+  - line
+  - polyline
+  - polygon
+  - text
+  - tspan
+  - linearGradient
+  - radialGradient
+  - stop
+  - clipPath
+attributes:
+  - id
+  - x
+  - y
+  - x1
+  - y1
+  - x2
+  - y2
+  - cx
+  - cy
+  - r
+  - rx
+  - ry
+  - width
+  - height
+  - viewBox
+  - preserveAspectRatio
+  - d
+  - points
+  - transform
+  - fill
+  - fill-opacity
+  - fill-rule
+  - stroke
+  - stroke-width
+  - stroke-opacity
+  - stroke-linecap
+  - stroke-linejoin
+  - stroke-miterlimit
+  - stroke-dasharray
+  - stroke-dashoffset
+  - opacity
+  - font-family
+  - font-size
+  - font-weight
+  - font-style
+  - text-anchor
+  - dominant-baseline
+  - dx
+  - dy
+  - rotate
+  - offset
+  - stop-color
+  - stop-opacity
+  - gradientUnits
+  - gradientTransform
+  - spreadMethod
+  - fx
+  - fy
+  - fr
+  - clip-path
+  - clipPathUnits
+url_attributes:
+  - fill
+  - stroke
+  - clip-path
+reference_targets:
+  fill: linearGradient, radialGradient
+  stroke: linearGradient, radialGradient
+  clip-path: clipPath
+reference_bearing_elements:
+  - clipPath
+  - linearGradient
+  - radialGradient
+content_models:
+  svg: svg, g, defs, title, desc, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, linearGradient, radialGradient, clipPath
+  g: svg, g, defs, title, desc, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, linearGradient, radialGradient, clipPath
+  defs: svg, g, defs, title, desc, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, linearGradient, radialGradient, clipPath
+  clipPath: svg, g, defs, title, desc, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, linearGradient, radialGradient, clipPath
+  linearGradient: stop, title, desc
+  radialGradient: stop, title, desc
+  text: tspan
+  tspan: tspan
+  title: none
+  desc: none
+  stop: none
+  path: none
+  rect: none
+  circle: none
+  ellipse: none
+  line: none
+  polyline: none
+  polygon: none
+text_elements:
+  - text
+  - tspan
+  - title
+  - desc
