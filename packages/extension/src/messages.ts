@@ -2,9 +2,11 @@ import { MAX_SVG_BYTES } from './profile.ts';
 
 // Bounded, schema-checked messages from the webview to the extension host.
 // Anything malformed, oversized or unexpected is rejected, never coerced.
+export type PreviewMode = 'saved' | 'edited';
 export type WebviewMessage =
   | { type: 'ready' }
-  | { type: 'sourceChanged'; revision: number; source: string };
+  | { type: 'sourceChanged'; revision: number; source: string }
+  | { type: 'setPreviewMode'; mode: PreviewMode };
 
 export type MessageValidation = { ok: true; message: WebviewMessage } | { ok: false; reason: string };
 
@@ -20,6 +22,12 @@ export function validateWebviewMessage(value: unknown, serializedSize?: number):
   if (record.type === 'ready') {
     if (keys.length !== 1) return { ok: false, reason: 'ready takes no fields' };
     return { ok: true, message: { type: 'ready' } };
+  }
+  if (record.type === 'setPreviewMode') {
+    if (keys.join(',') !== 'mode,type') return { ok: false, reason: 'setPreviewMode fields mismatch' };
+    if (record.mode !== 'saved' && record.mode !== 'edited')
+      return { ok: false, reason: 'mode must be saved or edited' };
+    return { ok: true, message: { type: 'setPreviewMode', mode: record.mode } };
   }
   if (record.type === 'sourceChanged') {
     if (keys.join(',') !== 'revision,source,type') return { ok: false, reason: 'sourceChanged fields mismatch' };

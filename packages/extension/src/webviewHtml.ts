@@ -8,6 +8,7 @@ export type WebviewAssets = {
   workerUri: string;
   styleUri: string;
   scriptUri: string;
+  stateScriptUri: string;
 };
 
 export function cspFor(assets: WebviewAssets): string {
@@ -37,11 +38,19 @@ export function buildEditorHtml(assets: WebviewAssets): string {
 <body>
 <div id="meta">Loading…</div>
 <div id="panes">
-  <div id="preview-pane"><img id="preview" alt="Saved PNG preview"></div>
+  <div id="preview-pane">
+    <div id="preview-toggle" role="group" aria-label="Preview source">
+      <button id="show-saved" type="button">Saved PNG</button>
+      <button id="show-edited" type="button">Edited SVG</button>
+    </div>
+    <div id="preview-status"></div>
+    <img id="preview" alt="PNG preview">
+  </div>
   <div id="editor"></div>
 </div>
 <script id="vpe-config" type="application/json" nonce="${assets.nonce}">${config}</script>
 <script nonce="${assets.nonce}" src="${assets.monacoVsUri}/loader.js"></script>
+<script nonce="${assets.nonce}" src="${assets.stateScriptUri}"></script>
 <script nonce="${assets.nonce}" src="${assets.scriptUri}"></script>
 </body>
 </html>`;

@@ -8,6 +8,30 @@ const config = JSON.parse(document.getElementById('vpe-config').textContent);
 let editor = null;
 let monacoRef = null;
 let profile = { elements: [], attributes: [] };
+const previewState = window.VpePreviewState.createPreviewState();
+let savedUri = '';
+
+function refreshPreview() {
+  const img = document.getElementById('preview');
+  const uri = previewState.visibleUri(savedUri);
+  if (uri && img.getAttribute('src') !== uri) img.src = uri;
+  document.getElementById('show-saved').setAttribute('aria-pressed', String(previewState.mode === 'saved'));
+  document.getElementById('show-edited').setAttribute('aria-pressed', String(previewState.mode === 'edited'));
+  const status = document.getElementById('preview-status');
+  status.textContent = previewState.mode === 'edited'
+    ? (previewState.editedError ?? (previewState.editedUri ? '' : 'No edited preview yet.'))
+    : '';
+}
+document.getElementById('show-saved').addEventListener('click', () => {
+  previewState.showSaved();
+  vscode.postMessage({ type: 'setPreviewMode', mode: 'saved' });
+  refreshPreview();
+});
+document.getElementById('show-edited').addEventListener('click', () => {
+  previewState.showEdited();
+  vscode.postMessage({ type: 'setPreviewMode', mode: 'edited' });
+  refreshPreview();
+});
 let revision = 0;
 let applyingHostUpdate = false;
 
@@ -58,13 +82,23 @@ window.addEventListener('message', (event) => {
   if (!message || typeof message !== 'object') return;
   if (message.type === 'init') {
     profile = { elements: message.elements ?? [], attributes: message.attributes ?? [] };
-    document.getElementById('preview').src = message.previewUri;
+    savedUri = message.previewUri;
+    refreshPreview();
     document.getElementById('meta').textContent = message.meta;
     if (editor && editor.getValue() !== message.source) {
       applyingHostUpdate = true;
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+  } else if (message.type === 'previewRendered') {
+    previewState.editedRendered(message.uri, message.revision);
+    refreshPreview();
+  } else if (message.type === 'previewInvalid') {
+    previewState.editedInvalid(`Edited preview unavailable: ${message.message}`);
+    refreshPreview();
+  } else if (message.type === 'previewUnavailable') {
+    previewState.editedInvalid(message.message);
+    refreshPreview();
   } else if (message.type === 'diagnostics' && editor) {
     if (!monacoRef) return;
     const markers = message.diagnostics.map(d => ({
