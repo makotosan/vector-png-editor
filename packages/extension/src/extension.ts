@@ -8,6 +8,8 @@ import { extractSource, type ExtractedSource } from './extract.ts';
 import { validateWebviewMessage } from './messages.ts';
 import { diagnoseSource, lineCol } from './diagnostics.ts';
 import { SAFE_SVG_ATTRIBUTES, SAFE_SVG_ELEMENTS } from './profile.ts';
+import { parseSchemaProfile, type SchemaProfile } from './profileData.ts';
+import { readFileSync } from 'node:fs';
 import { buildEditorHtml } from './webviewHtml.ts';
 import { PreviewController } from './preview.ts';
 import { createCorePreviewRenderer } from './corePreview.ts';
@@ -92,6 +94,28 @@ type VectorPngEdit = {
 // tokens, clean reload, dirty preservation and explicit conflict
 // resolution at save is P2-06; Python discovery and the managed
 // environment lifecycle (bridge manager) are P2-07.
+// The generated safe-svg-v1 Monaco metadata (Issue #22 Phase 2):
+// packaged under media/schemas, or read from the repo checkout during
+// development. Absent or invalid data falls back to the mirrored
+// constants in profile.ts - completion stays advisory either way and
+// the Core validator remains authoritative.
+let schemaProfileCache: SchemaProfile | null | undefined;
+function loadSchemaProfile(extensionUri: vscode.Uri): SchemaProfile | null {
+  if (schemaProfileCache !== undefined) return schemaProfileCache;
+  const candidates = [
+    join(extensionUri.fsPath, 'media', 'schemas', 'safe-svg-v1.monaco.json'),
+    join(extensionUri.fsPath, '..', '..', 'schemas', 'safe-svg-v1.monaco.json'),
+  ];
+  for (const candidate of candidates) {
+    try {
+      schemaProfileCache = parseSchemaProfile(readFileSync(candidate, 'utf8'));
+      return schemaProfileCache;
+    } catch { /* try the next location, then fall back */ }
+  }
+  schemaProfileCache = null;
+  return null;
+}
+
 class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDocument> {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<VectorPngDocument>>();
   readonly onDidChangeCustomDocument = this.changeEmitter.event;
@@ -275,6 +299,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     // the pane still opens on the saved raster and never auto-switches.
     if (document.pendingSource !== undefined) preview.schedule(document.pendingSource, 0);
 
+    const schemaProfile = loadSchemaProfile(this.extensionUri);
     const subscription = panel.webview.onDidReceiveMessage((raw: unknown) => {
       const validation = validateWebviewMessage(raw);
       if (!validation.ok) return; // Bounded protocol: drop invalid messages.
@@ -285,8 +310,11 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
           previewUri: savedUri(),
           meta: `${document.width} x ${document.height} vector-png`,
           source: document.pendingSource ?? '',
-          elements: SAFE_SVG_ELEMENTS,
-          attributes: SAFE_SVG_ATTRIBUTES,
+          elements: schemaProfile?.elements ?? SAFE_SVG_ELEMENTS,
+          attributes: schemaProfile?.attributes ?? SAFE_SVG_ATTRIBUTES,
+          children: schemaProfile?.children ?? {},
+          textElements: schemaProfile?.textElements ?? [],
+          profileVersion: schemaProfile?.version ?? null,
         });
         sendDiagnostics(document.pendingSource ?? '');
       } else if (message.type === 'sourceChanged') {
