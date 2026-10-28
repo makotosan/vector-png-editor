@@ -31,3 +31,5 @@
 bridge追加：0.1.0.dev3でprotocol-1 stdin要求、正確なinline原文、厳密な上限付きdecode、TypeScript制御・古い結果の拒否、読み取り専用環境診断を実装しました。[BRIDGE.ja.md](BRIDGE.ja.md)を参照してください。ファイル形式、renderer方針、仕様固定、書込競合制御は変更しません。P1-04のnative・推移的依存固定、穏当なworker取消、描画出力上限、更新・切り戻しは残ります。
 
 専用環境管理の追加：別のTypeScript APIで、レビューしたPythonアプリ依存のversion lockの導入、新しい不変venvの健全性検査、atomic有効化、検証済み切り戻しに対応しました。[INSTALL.ja.md](INSTALL.ja.md)を参照してください。native・成果物hash、VS Code setup・dirty編集連携、完全なrenderer制御は残ります。wire v1、仕様固定、Coreライター、standalone pipの既定依存動作は変更しません。
+
+safe-svg-v1スキーマ追加（Issue #22、SPEC §5）：プロファイルをCoreと全点照合し、allowlist全体（要素18・属性51・値と参照の規則・上限）で一致を確認しました。機械可読なpolicyが、Relax NGスキーマ、AI生成ルール、Monacoメタデータ、ハッシュ付きmanifestを生成し、ずれ検出テストがこれを守ります。診断Validatorは全ての違反を位置と修正提案つきで報告します。Coreの受理は変更せず、スキーマ層の内容モデルは `validate --profile safe-svg-v1` の生成ゲートでのみ有効なため、既存の有効なファイルへの影響はなく、wire・固定基準の変更もありません。証拠：CoreスイートのSC-01からSC-09、SC-11、SC-12。Phase 2（Skill／Monaco連携）とSC-10の実生成実行は残り、[SAFE_SVG_V1.ja.md](SAFE_SVG_V1.ja.md)を参照してください。

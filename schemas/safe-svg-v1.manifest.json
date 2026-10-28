@@ -1,0 +1,19 @@
+{
+  "profile": "safe-svg-v1",
+  "profileVersion": "1.0.0",
+  "spec": {
+    "repository": "makotosan/vector-png-spec",
+    "revision": "8238ebdaa136f448affa53133b99ee5afde5765a",
+    "document": "profiles/safe-svg-v1.md"
+  },
+  "policy": {
+    "file": "safe-svg-v1.policy.yaml",
+    "sha256": "0c6a7eeaa7bca9beb1665efb92c52af92fded5845ed3291aa499f24bed0f1ef9"
+  },
+  "artifacts": {
+    "safe-svg-v1.monaco.json": "86700c20452663131db4881385a57a6ab2ed4f29e3724d3a99a8d1d27ee80915",
+    "safe-svg-v1.rng": "54f1490acb3179c2c92177c67f55739766ea57bb5bc12d838737adfd17f82692",
+    "safe-svg-v1.rules.md": "a8358804bee63a0260d1034ab2cc20478784c59ca25cfd9309c176d7c4c7c573"
+  },
+  "generator": "tools/generate_safe_svg_schemas.py"
+}
