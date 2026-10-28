@@ -3,8 +3,11 @@
 These fixtures are vendored verbatim from the specification repository
 **makotosan/vector-png-spec**, directory `fixtures/normalization/`, at the
 pinned revision recorded in the repository-root `spec-reference.json`
-(`8238ebdaa136f448affa53133b99ee5afde5765a`, the revision whose HEAD commit is
-"Specify safe SVG normalization for CSS-styled diagrams (#2)").
+(`12994c57121b759c835ee28cd25b88c12f67463c`, the merge of the
+specification amendments for Issue #3 of that repository — spec PR #4:
+`letter-spacing`, curved marker hosts, and the font-family
+clarification; the catalog at this revision has 27 cases, and its
+`unsupported-marker-host` case uses a degenerate curve).
 
 They are original synthetic test data published with the
 svg-normalization-v1 profile (`profiles/svg-normalization-v1.md`); no user

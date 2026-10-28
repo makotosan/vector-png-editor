@@ -37,19 +37,9 @@ def code_of(source: bytes) -> str:
 
 # ---------------------------------------------------------------- spec fixtures
 
-# Pinned-catalog expectations reversed by a spec amendment this branch
-# anticipates (makotosan/vector-png-spec#3): G2 admits absolute C
-# marker hosts, so "unsupported-marker-host" - a curved host the
-# pre-amendment section 3.1 rejected - now normalizes successfully.
-# The fixture data itself stays verbatim (see PROVENANCE.md); the
-# override lives here and in docs/SPEC_COMPATIBILITY.md until the pin
-# bump replaces the catalog with the amended one.
-AMENDMENT_SUPERSEDED = {"unsupported-marker-host": "accept"}
-
-
 @pytest.mark.parametrize("fixture", CASES, ids=[c["id"] for c in CASES])
 def test_fixture_cases(fixture):
-    if AMENDMENT_SUPERSEDED.get(fixture["id"], fixture["expect"]) == "accept":
+    if fixture["expect"] == "accept":
         output, report = normalize_structure(fixture["input"].encode())
         ET.fromstring(output)  # well-formed
         assert report["checks"]["input"] == "pass"

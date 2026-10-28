@@ -3,12 +3,12 @@
   "profileVersion": "1.0.0",
   "spec": {
     "repository": "makotosan/vector-png-spec",
-    "revision": "8238ebdaa136f448affa53133b99ee5afde5765a",
+    "revision": "12994c57121b759c835ee28cd25b88c12f67463c",
     "document": "profiles/safe-svg-v1.md"
   },
   "policy": {
     "file": "safe-svg-v1.policy.yaml",
-    "sha256": "9022c8321f5bc86cc71f0078d073bf48eb6333879bffc36454ccefb8cebf4054"
+    "sha256": "0f719d69bd92f6f8712d11b565279290aafd7eac23a66df0ab2338da5971b9e1"
   },
   "artifacts": {
     "safe-svg-v1.monaco.json": "9ff166650eed583daf15ca84189b6b7cca3b1a724110be2ad16687b0f9696a1e",
