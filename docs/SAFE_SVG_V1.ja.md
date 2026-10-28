@@ -4,12 +4,12 @@
 
 ## Phase 0 — プロファイルの実態（2026-10-28調査）
 
-規範プロファイルは makotosan/vector-png-spec の `profiles/safe-svg-v1.md` で、リビジョン 8238ebdaa136f448affa53133b99ee5afde5765a（draft 0.1）に固定されています。仕様は「初期Python実装の機能サブセットを記述する」と述べており、Core実装（`packages/core/src/vector_png_editor/svg.py` と `_backend.py`、makotosan/vector-png@d00dd88 から適応）は、直接比較により全ての点で一致することを確認しました。
+規範プロファイルは makotosan/vector-png-spec の `profiles/safe-svg-v1.md` で、リビジョン 12994c57121b759c835ee28cd25b88c12f67463c（draft 0.1）に固定されています。仕様は「初期Python実装の機能サブセットを記述する」と述べており、Core実装（`packages/core/src/vector_png_editor/svg.py` と `_backend.py`、makotosan/vector-png@d00dd88 から適応）は、直接比較により全ての点で一致することを確認しました。
 
 | 領域 | 仕様とCoreの一致 |
 | --- | --- |
 | 要素 | SVG名前空間の18要素（svg、g、defs、title、desc、path、rect、circle、ellipse、line、polyline、polygon、text、tspan、linearGradient、radialGradient、stop、clipPath）。それ以外は拒否 |
-| 属性 | 修飾なし51属性。未知または名前空間修飾つき属性は拒否（したがって `class`、`style`、`href`、イベントハンドラーは全て対象外） |
+| 属性 | 修飾なし52属性（固定プロファイルの52件。G1改訂による `letter-spacing` を含む。下記G1の注記参照）。未知または名前空間修飾つき属性は拒否（したがって `class`、`style`、`href`、イベントハンドラーは全て対象外） |
 | 値 | 全ての属性値で、バックスラッシュ、@、波括弧、セミコロン、山括弧、NUL、TAB/LF/CR以外の制御文字を禁止。値あたり最大100,000コードポイント |
 | 参照 | `url(#ID)` のみ。fill/strokeではローカルgradientへ、clip-pathではローカルclipPathへ。idは `[A-Za-z_][A-Za-z0-9_.-]*` に一致し一意。リソース定義内部の参照は禁止 |
 | 構造 | UTF-8のみ。DTD・実体・処理命令なし。コメントと任意のUTF-8 XML宣言は可。ルートはSVG名前空間の `svg` |
@@ -17,7 +17,7 @@
 | 数値、色、パスデータ、transform、フォント | allowlistでは **検証しません**。仕様はこれらを有界レンダラーへ割り当てています（「数値・パス構文は有界レンダラーを通じて検証する」）。CairoSVGが描画時に受理・拒否し、フォント選択はホスト依存です |
 | 親子関係 | 仕様は **何も** 定義せず、Coreも強制しません |
 
-記録する差異とリスク：(1) allowlistの表面では仕様と実装の差異は現在ありません。リスクは *ずれ* であり、policy同一性テストがこれを守ります。(2) ファイルはプロファイル検証を通っても描画に失敗し得ます（不正な数値・パスデータ）。そのため `--syntax-only` なしの `validate` は描画も行います。(3) CLI命名：本製品の出荷済みコマンドは `vector-png-editor validate <file.svg>`（呼出ごとにJSON封筒1つ、docs/CODEX.ja.md参照）であり、v1.2形式の `validate --profile safe-svg-v1 --json` は既存CLI上の `vector-png-editor validate <file.svg> --profile safe-svg-v1` として実現します。そこではJSONは無条件であり、出荷済みバイナリの改名は機能的利益なく文書化済みワークフローを壊します。
+記録する差異とリスク：(1) allowlistの表面は、G1改訂（`letter-spacing`、下記）を含め固定プロファイルと一致します。残るリスクは *ずれ* であり、policy同一性テストがこれを守ります。(2) ファイルはプロファイル検証を通っても描画に失敗し得ます（不正な数値・パスデータ）。そのため `--syntax-only` なしの `validate` は描画も行います。(3) CLI命名：本製品の出荷済みコマンドは `vector-png-editor validate <file.svg>`（呼出ごとにJSON封筒1つ、docs/CODEX.ja.md参照）であり、v1.2形式の `validate --profile safe-svg-v1 --json` は既存CLI上の `vector-png-editor validate <file.svg> --profile safe-svg-v1` として実現します。そこではJSONは無条件であり、出荷済みバイナリの改名は機能的利益なく文書化済みワークフローを壊します。
 
 ## Phase 1 — スキーマ層
 
@@ -31,6 +31,10 @@
 Coreのテストが、policy、生成物、実装自身のallowlistの間のいかなるずれも失敗として検出します。
 
 **意図的な2層構成。** Coreの受理（build／保存）は上記の仕様プロファイルそのままに保たれるため、既存の有効なファイルは全て動き続けます（SC-12）。スキーマ層は *内容モデル*（どの要素がどの要素の中に現れてよいか。例えば `stop` はgradientの中だけ）を、生成のための著述制約として追加します。新しい診断Validator（`profile_check.py`）は、全ての違反を severity／code／element／attribute／line／column／message／suggestion つきで報告します。互換モードではその判定はCoreと一致し、`validate --profile safe-svg-v1` では内容モデルも強制されるため、AI生成SVGはPNGが書かれる前に、より厳格な構造へ従うことを求められます。検証に失敗しても既存PNGには触れず、書込み経路はリビジョン確認つきの原子的なbuildのままです（P1-03／P2-04）。
+
+## 改訂 — `letter-spacing`（G1）
+
+makotosan/vector-png-spec#3（改訂G1）により、`letter-spacing` がプレゼンテーション属性としてsafe-svg-v1に追加されました。エディターは改訂の起草中に先行して実装しました（PR #51）が、改訂は上流でマージされ（仕様PR #4）、spec-reference.jsonの固定はマージ済みリビジョンを指すようになったため、Coreのallowlist、policy、生成物と、固定されたプロファイル本文は同じ52属性で一致し、一時的な乖離は解消しました。他の全てのallowlist判定は不変であり、同一性テストが52属性の表面を守ります。docs/SPEC_COMPATIBILITY.ja.mdに、変更とその証拠を記録します。
 
 ## Issue #22 に対する状態
 

@@ -1,0 +1,137 @@
+[
+  {
+    "id": "rounded-diagram-arrows",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" role=\"img\" aria-labelledby=\"t d\"><title id=\"t\">Public diagram</title><desc id=\"d\">Synthetic arrows</desc><defs><marker id=\"arrow\" markerWidth=\"12\" markerHeight=\"12\" refX=\"10\" refY=\"6\" orient=\"auto\"><path d=\"M0,0 L12,6 L0,12 Z\" fill=\"#363636\"/></marker><style>.box {fill: white; stroke: black; stroke-width: 2; rx: 10} .arrow {fill: none; stroke: black; stroke-width: 2; marker-end: url(#arrow)}</style></defs><rect class=\"box\" x=\"10\" y=\"10\" width=\"60\" height=\"40\"/><path class=\"arrow\" d=\"M70 30 H130\"/><path class=\"arrow\" d=\"M200 50 V90 H40 V70\"/></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "cascade",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>rect {fill: red} .paint {fill: blue} #box {fill: green} .paint {fill: yellow}</style><g fill=\"purple\" opacity=\"0.5\"><rect id=\"box\" class=\"paint\" width=\"20\" height=\"20\" fill=\"white\"/><rect class=\"paint\" x=\"30\" width=\"20\" height=\"20\" style=\"fill: teal; fill: navy\"/><circle cx=\"90\" cy=\"10\" r=\"10\"/></g></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "source-order",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.paint {fill: blue} .paint {fill: red}</style><rect class=\"paint\" width=\"20\" height=\"20\"/></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "selector-list",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>rect, .paint {fill: blue}</style><rect width=\"20\" height=\"20\"/><circle class=\"paint\" cx=\"60\" cy=\"10\" r=\"10\"/></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "accessibility",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" role=\"img\" aria-labelledby=\"t\" aria-label=\"fallback\" aria-describedby=\"d\" aria-live=\"polite\"><title id=\"t\">Example</title><desc id=\"d\">Description</desc><rect width=\"20\" height=\"20\"/></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "important-conflict",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.a {fill: red !important} #x {fill: blue}</style><rect id=\"x\" class=\"a\"/></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "unsupported-unmatched",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.unused {filter: blur(2px)}</style></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "unclosed-rule",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.paint {fill: red</style></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "unclosed-comment",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>/* unfinished</style></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "external-css",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>@import \"https://example.invalid/style.css\";</style></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "external-paint",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><rect fill=\"url(https://example.invalid/paint.svg#p)\"/></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "pseudo-selector",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>rect:hover {fill: red}</style></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "relative-font",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><text style=\"font-size: 2em\">Example</text></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "escaped-css",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.a {f\\69ll: red}</style></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "unsafe-xml",
+    "input": "<!DOCTYPE svg [<!ENTITY example \"inert\">]><svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+    "expect": "unsafe-input"
+  },
+  {
+    "id": "processing-instruction",
+    "input": "<?example inert?><svg xmlns=\"http://www.w3.org/2000/svg\"/>",
+    "expect": "unsafe-input"
+  },
+  {
+    "id": "script-element",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><script/></svg>",
+    "expect": "unsafe-input"
+  },
+  {
+    "id": "event-attribute",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><rect onclick=\"inert\"/></svg>",
+    "expect": "unsafe-input"
+  },
+  {
+    "id": "duplicate-xml-attribute",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><rect fill=\"red\" fill=\"blue\"/></svg>",
+    "expect": "invalid-xml"
+  },
+  {
+    "id": "missing-aria-target",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" aria-labelledby=\"missing\"></svg>",
+    "expect": "invalid-reference"
+  },
+  {
+    "id": "missing-paint-target",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><rect fill=\"url(#missing)\"/></svg>",
+    "expect": "invalid-reference"
+  },
+  {
+    "id": "wrong-paint-target",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><rect id=\"paint\" fill=\"url(#paint)\"/></svg>",
+    "expect": "invalid-reference"
+  },
+  {
+    "id": "recursive-definition",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><defs><clipPath id=\"c\"><rect clip-path=\"url(#c)\"/></clipPath></defs></svg>",
+    "expect": "invalid-reference"
+  },
+  {
+    "id": "unsupported-marker-host",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><defs><marker id=\"a\" markerWidth=\"12\" markerHeight=\"12\" refX=\"10\" refY=\"6\" orient=\"auto\"><path d=\"M0,0 L12,6 L0,12 Z\" fill=\"black\"/></marker></defs><path d=\"M0 0 C5 6 5 6 5 6\" fill=\"none\" marker-end=\"url(#a)\"/></svg>",
+    "expect": "unsupported-css"
+  },
+  {
+    "id": "letter-spacing",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>.brand {font-family: sans-serif; font-size: 20px; letter-spacing: 2px; fill: #222}</style><text class=\"brand\" x=\"10\" y=\"40\">ACME</text></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "curved-marker-host",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" role=\"img\" aria-labelledby=\"t\"><title id=\"t\">Curved arrow</title><defs><marker id=\"arrow\" markerWidth=\"12\" markerHeight=\"12\" refX=\"10\" refY=\"6\" orient=\"auto\"><path d=\"M0,0 L12,6 L0,12 Z\" fill=\"#363636\"/></marker><style>.arrow {fill: none; stroke: black; stroke-width: 2; marker-end: url(#arrow)}</style></defs><path class=\"arrow\" d=\"M20 90 C60 90 80 30 130 30\"/></svg>",
+    "expect": "accept"
+  },
+  {
+    "id": "font-family-system-names",
+    "input": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"240\" height=\"120\" ><style>text {font-family: -apple-system,BlinkMacSystemFont,\"Yu Gothic\",sans-serif; font-size: 16px}</style><text x=\"10\" y=\"40\">Text</text></svg>",
+    "expect": "accept"
+  }
+]
