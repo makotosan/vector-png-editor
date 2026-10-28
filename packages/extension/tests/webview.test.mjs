@@ -47,6 +47,14 @@ test('webview script uses no CDN, no innerHTML, and posts only protocol messages
   assert.match(js, /MonacoEnvironment/);
 });
 
+test('Monaco follows the VS Code colour theme (Issue #45, design B)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /classList\.contains\('vscode-dark'\)/);
+  assert.match(js, /monaco\.editor\.setTheme\(/);
+  assert.match(js, /'vs-dark' : 'vs'/);
+  assert.match(js, /MutationObserver\(syncMonacoTheme\)/);
+});
+
 test('editor HTML (Issue #45) has the code toolbar and the Preview panel structure', () => {
   const html = buildEditorHtml(assets);
   for (const id of ['code-pane', 'code-toolbar', 'tool-save', 'tool-format', 'editor',

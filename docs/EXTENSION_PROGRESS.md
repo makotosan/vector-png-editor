@@ -449,7 +449,11 @@ family, #252526 panel, #3c3c3c borders, #0e639c accent) only as
 Save and Export PNG are the primary accent buttons; everything else
 is a secondary button; the checkerboard is a translucent-grey
 `repeating-conic-gradient` that reads as dark greys on a dark panel
-and light greys on a light one. No new dependencies, no inline event
+and light greys on a light one. The Monaco code area follows the
+same theme: the theme class VS Code stamps on the webview body
+(`vscode-dark` / `vscode-high-contrast`) selects Monaco's matching
+built-in theme, kept in step by a class observer, so the whole page
+reads as one surface. No new dependencies, no inline event
 handlers, no SVG markup in the DOM (the preview remains an `<img>`),
 and the CSP is unchanged (`default-src 'none'`, nonce scripts).
 

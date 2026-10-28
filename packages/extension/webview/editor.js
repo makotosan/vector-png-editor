@@ -196,6 +196,18 @@ self.MonacoEnvironment = {
 require.config({ paths: { vs: config.monacoVs } });
 require(['vs/editor/editor.main'], (monaco) => {
   monacoRef = monaco;
+  // Follow the VS Code colour theme (design B, Issue #45): VS Code
+  // marks the webview body with its theme class, and the page chrome
+  // already follows it through the --vscode-* variables. Give Monaco
+  // the matching built-in theme and keep it in step when the class
+  // changes (a theme switch does not reload the webview).
+  const syncMonacoTheme = () => {
+    monaco.editor.setTheme(document.body.classList.contains('vscode-dark') ||
+      document.body.classList.contains('vscode-high-contrast')
+      ? 'vs-dark' : 'vs');
+  };
+  syncMonacoTheme();
+  new MutationObserver(syncMonacoTheme).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   editor = monaco.editor.create(document.getElementById('editor'), {
     value: '',
     language: 'xml',
