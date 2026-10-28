@@ -130,14 +130,14 @@ hand-encoded Adam7 interlaced rasters are container-accepted, and an
 Adam7 re-encode of a render still verifies as an exact pixel match,
 confirming that verification compares decoded pixels, not PNG bytes.
 
-Explicit open audit item (P0-01): BCP 47 registry-level validation of
-the iTXt language tag is NOT performed. The reader checks only that
-the tag is ASCII, so registry-invalid tags such as `en_US`, `en--US`
-or an over-long first subtag are currently accepted (pinned as
-current behavior by the probes). SPEC section 3 requires accepting
-PNG-valid tags; whether registry-invalid tags must be rejected is a
-strictness decision for the user, recorded here rather than changed
-silently. A second documented behavior: rebuild does not retain
+Documented leniency, decided (P0-01): BCP 47 registry-level
+validation of the iTXt language tag is NOT performed. The reader
+checks only that the tag is ASCII, so registry-invalid tags such as
+`en_US`, `en--US` or an over-long first subtag are accepted (pinned
+by the probes). SPEC section 3 requires accepting PNG-valid tags;
+on 2026-10-28 the user decided to keep this lenient behavior for
+wire v1 rather than tighten it, so this is a recorded decision, not
+an open item. A second documented behavior: rebuild does not retain
 unrelated ancillary chunks (SPEC section 6 permits but does not
 require retention).
 

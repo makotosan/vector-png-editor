@@ -152,12 +152,13 @@ def test_png_valid_language_tags_accepted(language):
 
 
 @pytest.mark.parametrize("language", [b"en_US", b"en--US", b"-en", b"en-", b"abcdefghi"])
-def test_registry_invalid_language_tags_currently_accepted_open_audit(language):
+def test_registry_invalid_language_tags_accepted_by_decision(language):
     # SPEC section 3 requires accepting PNG-valid tags; it does not
     # require rejecting registry-invalid ones explicitly, but PNG
     # validity incorporates the tag grammar. The reader checks only
-    # ASCII today (see document.source_payload); BCP 47 registry
-    # validation is an explicit open audit item in docs/PHASE0.md.
+    # ASCII (see document.source_payload). Decision recorded
+    # 2026-10-28 (Issue #1): keep this lenient behavior; BCP 47
+    # registry validation is a documented non-goal for wire v1.
     doc = read_document_bytes(with_source(itxt(language=language)))
     assert doc.source == SVG
 
