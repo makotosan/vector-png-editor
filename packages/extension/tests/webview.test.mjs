@@ -102,7 +102,7 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
     'fill-row', 'fill-swatch', 'fill-text', 'fill-apply',
     'background-row', 'background-swatch', 'background-text',
     'preview-toggle', 'show-saved', 'show-edited', 'preview-status',
-    'preview-area', 'preview', 'preview-actions', 'action-copy', 'action-export', 'action-export-png'])
+    'preview-area', 'preview', 'preview-actions', 'action-export', 'action-export-png', 'tool-copy'])
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   assert.match(html, /id="tool-save" type="button">Save</);
   assert.match(html, /id="tool-format" type="button">Format</);
@@ -115,9 +115,10 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
   assert.match(html, /id="fill-apply" type="button">Apply</);
   assert.match(html, /id="show-saved" type="button">PNG</);
   assert.match(html, /id="show-edited" type="button">Editing</);
-  assert.match(html, /id="action-copy" type="button">Copy</);
-  assert.match(html, /id="action-export" type="button">Export</);
-  assert.match(html, /id="action-export-png" type="button">Export PNG</);
+  assert.match(html, /id="tool-copy" type="button">Copy SVG</);
+  assert.doesNotMatch(html, /action-copy/, 'Copy SVG lives in the code toolbar, not the preview panel');
+  assert.match(html, /id="action-export" type="button">Export SVG</);
+  assert.match(html, /id="action-export-png" type="button">Export Plain PNG</);
   assert.match(html, /aria-pressed="true"/, 'one background preset starts pressed');
   assert.ok(!html.includes('<svg'), 'no SVG markup is ever placed in the DOM');
 });
@@ -133,7 +134,7 @@ test('editor CSS follows the VS Code theme variables with design-B dark fallback
     assert.ok(css.includes(fallback), `missing design-B fallback ${fallback}`);
   assert.match(css, /#preview-area\.checkerboard \{[^}]*background-image: var\(--vpe-checker\)/);
   assert.match(css, /--vpe-checker: repeating-conic-gradient\(rgba\(128, 128, 128/);
-  assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export PNG is the primary action');
+  assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export Plain PNG is the primary action');
   assert.match(css, /#tool-save \{[^}]*background: var\(--vpe-accent\)/, 'Save is the primary toolbar action');
   assert.match(css, /--vpe-btn-border: var\(--vscode-button-border, #858585\)/, 'buttons get a visible outline colour');
   assert.match(css, /--vpe-btn-radius: 6px/, 'buttons are rounded rectangles');

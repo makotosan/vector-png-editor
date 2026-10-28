@@ -609,3 +609,12 @@ random token, and each instance sweeps its document's preview
 files older than an hour on first use. A real-Core regression
 test renders through two renderer instances sharing one
 directory and one document key.
+
+Follow-up (2026-10-29, user request): the panel's Copy button
+moved to the code toolbar beside Wrap and was renamed
+**Copy SVG**; **Export** became **Export SVG** and
+**Export PNG** became **Export Plain PNG**, so every export
+control names its format. Behaviour and messages are unchanged
+(Copy SVG still posts `copySource` from the toolbar). The
+extension README's button table reflects the new labels and
+placement.

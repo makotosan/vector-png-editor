@@ -252,7 +252,7 @@ fillText.addEventListener('keydown', (event) => { if (event.key === 'Enter') app
 
 document.getElementById('tool-save').addEventListener('click', () => vscode.postMessage({ type: 'saveDocument' }));
 document.getElementById('tool-format').addEventListener('click', () => vscode.postMessage({ type: 'formatSource' }));
-document.getElementById('action-copy').addEventListener('click', () => vscode.postMessage({ type: 'copySource' }));
+document.getElementById('tool-copy').addEventListener('click', () => vscode.postMessage({ type: 'copySource' }));
 document.getElementById('action-export').addEventListener('click', () => vscode.postMessage({ type: 'exportSource' }));
 document.getElementById('action-export-png').addEventListener('click', () => vscode.postMessage({ type: 'exportPng' }));
 // SVG-only panel buttons (Issue #47 commands): the row stays hidden
