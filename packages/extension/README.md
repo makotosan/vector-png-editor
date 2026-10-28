@@ -4,6 +4,19 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
+## P2-06: external change conflicts
+
+Each document tracks the SHA-256 of the file bytes it last agreed
+with (`src/watch.ts`). A file watcher classifies every disk change by
+content, not timing - so the echo of our own save is ignored. An
+external change to a clean document reloads it; a change to a dirty
+document (or unreadable content, or a deletion) preserves the buffer,
+notifies the user, and blocks the next save behind an explicit choice:
+reload from disk, overwrite the external change, or Save As. Deleting
+the file under a dirty document lets save recreate it. The save-time
+revision token (P2-04) remains the second line of defense against a
+change that lands between observation and save.
+
 ## P2-05: undo/redo synchronization and recovery
 
 `src/history.ts` is the single authoritative history for a document.
