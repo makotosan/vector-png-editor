@@ -21,7 +21,7 @@ export function createCoreSaveDeps(pythonPath: string | undefined): SaveDeps {
     async build(request): Promise<BuildOutcome> {
       const python = pythonPath?.trim();
       if (!python)
-        throw new SaveUnavailableError('Saving needs the Python Core: set "vectorPng.corePythonPath" to a Python 3.11-3.13 with vector-png-editor installed. Your edits are preserved in the dirty buffer.');
+        throw new SaveUnavailableError('Saving needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed. Your edits are preserved in the dirty buffer.');
       let response;
       try {
         response = await runCore(python, {

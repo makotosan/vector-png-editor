@@ -12,7 +12,14 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onCustomEditor:vectorPng.editor",
+    "onCommand:vectorPng.openInEditor",
+    "onCommand:vectorPng.newDocument",
+    "onCommand:vectorPng.setupEnvironment",
+    "onCommand:vectorPng.environmentStatus",
+    "onCommand:vectorPng.rollbackEnvironment"
+  ],
   "main": "./out/extension.js",
   "scripts": {
     "check": "tsc -p .",
@@ -46,6 +53,18 @@
       {
         "command": "vectorPng.newDocument",
         "title": "Vector PNG: New Document"
+      },
+      {
+        "command": "vectorPng.setupEnvironment",
+        "title": "Vector PNG: Set Up Python Environment"
+      },
+      {
+        "command": "vectorPng.environmentStatus",
+        "title": "Vector PNG: Python Environment Status"
+      },
+      {
+        "command": "vectorPng.rollbackEnvironment",
+        "title": "Vector PNG: Roll Back Python Environment"
       }
     ],
     "menus": {
@@ -71,7 +90,12 @@
         "vectorPng.corePythonPath": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to a Python 3.11-3.13 executable with the vector-png-editor Core installed. Used to validate and render edited previews (P2-03). Leave empty until the managed environment integration lands; edited previews are then unavailable and the saved PNG preview keeps working."
+          "markdownDescription": "Path to a Python 3.11-3.13 executable with the vector-png-editor Core installed. Takes precedence over the managed environment (see 'Vector PNG: Set Up Python Environment'). Leave empty to use the managed environment."
+        },
+        "vectorPng.coreWheelPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to a trusted vector_png_editor_core wheel used by 'Vector PNG: Set Up Python Environment' when no bundled wheel is present."
         }
       }
     }

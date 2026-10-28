@@ -16,6 +16,10 @@ import { createCoreSaveDeps } from './coreSave.ts';
 import { SourceHistory } from './history.ts';
 import { writeBackup, readBackup, deleteBackup } from './backup.ts';
 import { ExternalChangeTracker } from './watch.ts';
+import { discoverPython, parseProbeOutput, PROBE_SCRIPT } from './pythonDiscovery.ts';
+import { resolveCorePython, managedPython, locateCoreArtifacts } from './managedEnv.ts';
+import { prepareEnvironment, rollbackEnvironment, EnvironmentError, isolatedEnvironment } from '../../bridge/src/environment.ts';
+import { runBounded } from '../../bridge/src/process.ts';
 
 export const VIEW_TYPE = 'vectorPng.editor';
 
@@ -86,7 +90,8 @@ type VectorPngEdit = {
 // authoritative undo/redo history, backup recovery and multi-panel
 // synchronization are P2-05; external-change watching with revision
 // tokens, clean reload, dirty preservation and explicit conflict
-// resolution at save is P2-06.
+// resolution at save is P2-06; Python discovery and the managed
+// environment lifecycle (bridge manager) are P2-07.
 class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDocument> {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<VectorPngDocument>>();
   readonly onDidChangeCustomDocument = this.changeEmitter.event;
@@ -94,10 +99,15 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly storageUri: vscode.Uri | undefined,
+    private readonly extensionDir: string,
+    private readonly managedRoot: string,
   ) {}
 
-  private corePythonPath(): string | undefined {
-    return vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
+  // Python resolution (P2-07): an explicit setting wins; otherwise
+  // the managed environment's active interpreter.
+  private corePythonPath(): Promise<string | undefined> {
+    const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
+    return resolveCorePython(this.managedRoot, configured);
   }
 
   async openCustomDocument(uri: vscode.Uri): Promise<VectorPngDocument> {
@@ -227,7 +237,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const documentKey = createHash('sha256').update(document.uri.toString()).digest('hex').slice(0, 16);
     const preview = new PreviewController(
       createCorePreviewRenderer({
-        pythonPath: this.corePythonPath(),
+        pythonPath: await this.corePythonPath(),
         previewDir: previewDirUri.fsPath,
         width: document.width,
         height: document.height,
@@ -335,7 +345,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       if (choice !== 'Overwrite the external change') throw new Error('Save cancelled');
       document.tracker.resolveOverwrite();
     }
-    const deps = createCoreSaveDeps(this.corePythonPath());
+    const deps = createCoreSaveDeps(await this.corePythonPath());
     try {
       if (document.tracker.isDeleted) {
         // Recreate a file deleted on disk from the preserved buffer.
@@ -363,7 +373,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const source = document.pendingSource;
     if (source === undefined) throw new Error('Nothing to save');
     try {
-      await saveAs(createCoreSaveDeps(this.corePythonPath()), targetUri.fsPath, {
+      await saveAs(createCoreSaveDeps(await this.corePythonPath()), targetUri.fsPath, {
         source, width: document.width, height: document.height,
         isCancelled: () => cancellation.isCancellationRequested,
       });
@@ -430,14 +440,91 @@ async function newDocument(): Promise<void> {
   await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
 }
 
+const PYTHON_HINT = 'Install Python 3.11-3.13 from https://www.python.org/downloads/ (Windows: tick "Add python.exe to PATH" or install the py launcher; macOS: the python.org installer or Homebrew; Linux: your distribution packages), then run the setup command again.';
+const CAIRO_HINT = 'The Core also needs the native Cairo library: Windows - install the GTK runtime; macOS - `brew install cairo`; Linux - install libcairo2 from your distribution. Then run the setup command again.';
+
+async function probeCandidate(candidate: { command: string; args: string[] }) {
+  const { stdout } = await runBounded(candidate.command, [...candidate.args, '-I', '-c', PROBE_SCRIPT], {
+    env: isolatedEnvironment(), cwd: process.cwd(), timeoutMs: 15_000,
+  });
+  return parseProbeOutput(stdout);
+}
+
+async function setupEnvironment(context: vscode.ExtensionContext, managedRoot: string): Promise<void> {
+  const discovery = await discoverPython(probeCandidate, process.platform);
+  if (!discovery.selected) {
+    const found = discovery.unsupported.map((u) => `${u.version.join('.')} (${u.via})`).join(', ');
+    void vscode.window.showErrorMessage(
+      `Vector PNG: no supported Python found.${found ? ` Found only unsupported versions: ${found}.` : ''} ${PYTHON_HINT}`);
+    return;
+  }
+  const artifacts = await locateCoreArtifacts({
+    extensionDir: context.extensionPath,
+    wheelSetting: vscode.workspace.getConfiguration('vectorPng').get<string>('coreWheelPath'),
+  });
+  if (!artifacts) {
+    void vscode.window.showErrorMessage(
+      'Vector PNG: no Core wheel found. Set "vectorPng.coreWheelPath" to a trusted vector_png_editor_core wheel, or install a build that bundles one.');
+    return;
+  }
+  const allowNetwork = await vscode.window.showInformationMessage(
+    `Set up the managed Python environment from the Core ${artifacts.version} wheel (${artifacts.source})? Dependencies install from the pinned lock; setup never touches your system Python, and a failure keeps the current environment.`,
+    { modal: true }, 'Set up (offline, local wheelhouse only)', 'Set up (allow network)');
+  if (!allowNetwork) return;
+  const controller = new AbortController();
+  try {
+    const result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Vector PNG: setting up the Python environment', cancellable: true },
+      async (progress, token) => {
+        token.onCancellationRequested(() => controller.abort());
+        return prepareEnvironment({
+          root: managedRoot, python: discovery.selected!.executable,
+          wheel: artifacts.wheel, wheelSha256: artifacts.wheelSha256, version: artifacts.version,
+          requirements: artifacts.requirements, requirementsSha256: artifacts.requirementsSha256,
+          allowNetwork: allowNetwork.includes('allow network'), signal: controller.signal,
+          onProgress: (stage) => progress.report({ message: stage }),
+        });
+      });
+    void vscode.window.showInformationMessage(`Vector PNG: environment ready (${result.python}). Edited previews and saving now use the Python Core.`);
+  } catch (error) {
+    const stage = error instanceof EnvironmentError ? error.stage : '';
+    const message = error instanceof Error ? error.message : String(error);
+    const hint = /cairo|render/i.test(stage + message) ? ` ${CAIRO_HINT}` : '';
+    void vscode.window.showErrorMessage(`Vector PNG setup failed (${stage || 'error'}): ${message}. The previous environment, if any, is unchanged.${hint}`);
+  }
+}
+
+async function environmentStatus(managedRoot: string): Promise<void> {
+  const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
+  const managed = await managedPython(managedRoot);
+  const effective = await resolveCorePython(managedRoot, configured);
+  const lines = [
+    `Configured Python: ${configured?.trim() ? configured : '(not set)'}`,
+    `Managed environment: ${managed ?? '(none - run "Vector PNG: Set Up Python Environment")'}`,
+    `Effective Python: ${effective ?? '(none - edited previews and saving are unavailable; the saved PNG preview still works)'}`,
+  ];
+  void vscode.window.showInformationMessage(lines.join('  '), { modal: true });
+}
+
 export function activate(context: vscode.ExtensionContext): void {
+  const managedRoot = join(context.globalStorageUri.fsPath, 'managed-env');
   context.subscriptions.push(
-    vscode.window.registerCustomEditorProvider(VIEW_TYPE, new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri), {
+    vscode.window.registerCustomEditorProvider(VIEW_TYPE, new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri, context.extensionPath, managedRoot), {
       webviewOptions: { retainContextWhenHidden: true },
       supportsMultipleEditorsPerDocument: true,
     }),
     vscode.commands.registerCommand('vectorPng.openInEditor', openInEditor),
     vscode.commands.registerCommand('vectorPng.newDocument', newDocument),
+    vscode.commands.registerCommand('vectorPng.setupEnvironment', () => setupEnvironment(context, managedRoot)),
+    vscode.commands.registerCommand('vectorPng.environmentStatus', () => environmentStatus(managedRoot)),
+    vscode.commands.registerCommand('vectorPng.rollbackEnvironment', async () => {
+      try {
+        const result = await rollbackEnvironment({ root: managedRoot });
+        void vscode.window.showInformationMessage(`Vector PNG: rolled back to the previous environment (${result.python}).`);
+      } catch (error) {
+        void vscode.window.showErrorMessage(`Vector PNG rollback failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }),
   );
 }
 

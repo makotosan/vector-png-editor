@@ -4,6 +4,19 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
+## P2-07: Python discovery and managed environment
+
+Three commands integrate the bridge managed-environment manager
+(P1-04): **Set Up Python Environment** discovers a user Python
+3.11-3.13 (read-only probes; a miss is explained with install
+guidance), locates trusted Core artifacts (setting, bundled
+`managed/` wheel, or a sibling checkout), confirms any network use,
+and runs the manager with progress and cancellation - failures keep
+the previously active environment. **Python Environment Status** and
+**Roll Back Python Environment** report and roll back. Python
+resolution is: the `vectorPng.corePythonPath` setting, else the
+managed environment's active interpreter.
+
 ## P2-06: external change conflicts
 
 Each document tracks the SHA-256 of the file bytes it last agreed
