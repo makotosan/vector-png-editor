@@ -536,7 +536,7 @@ unavailable), the formatter (nesting, raw-region preservation,
 idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
-design-B CSS variables, and the plain-PNG export with fake
+design-B CSS variables, the Monaco theme sync, and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,
 convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live
