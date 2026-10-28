@@ -35,6 +35,39 @@ function elementSuggestions(model, position) {
 }
 const previewState = window.VpePreviewState.createPreviewState();
 let savedUri = '';
+let documentKind = 'vector-png';
+
+// Issue #47 follow-up (2026-10-29): for SVG documents the edited
+// preview renders locally from the model text. A host-side
+// temporary file is refused by the webview resource server in a
+// real VS Code host (401), so the current source becomes a blob
+// URL image instead - no file round-trip, and display is never
+// blocked by the safe-svg-v1 profile. Mirrors the host pipeline's
+// 300 ms debounce and its no-<svg>-root invalid outcome.
+const SVG_PREVIEW_DEBOUNCE_MS = 300;
+let svgPreviewTimer = undefined;
+let svgPreviewUrl = null;
+function sourceHasSvgRoot(source) {
+  const start = source.search(/<svg(?=[\s/>])/);
+  return start !== -1 && source.indexOf('>', start) !== -1;
+}
+function scheduleSvgPreview() {
+  if (documentKind !== 'svg' || !editor) return;
+  const forRevision = revision;
+  if (svgPreviewTimer !== undefined) clearTimeout(svgPreviewTimer);
+  svgPreviewTimer = setTimeout(() => {
+    svgPreviewTimer = undefined;
+    const source = editor.getValue();
+    if (!sourceHasSvgRoot(source)) {
+      previewState.editedInvalid('The source has no <svg> root element to preview');
+    } else {
+      if (svgPreviewUrl !== null) URL.revokeObjectURL(svgPreviewUrl);
+      svgPreviewUrl = URL.createObjectURL(new Blob([source], { type: 'image/svg+xml' }));
+      previewState.editedRendered(svgPreviewUrl, forRevision);
+    }
+    refreshPreview();
+  }, SVG_PREVIEW_DEBOUNCE_MS);
+}
 
 function refreshPreview() {
   const img = document.getElementById('preview');
@@ -276,6 +309,7 @@ require(['vs/editor/editor.main'], (monaco) => {
     if (applyingHostUpdate || !editor) return;
     revision += 1;
     vscode.postMessage({ type: 'sourceChanged', revision, source: editor.getValue() });
+    scheduleSvgPreview();
   });
 
   vscode.postMessage({ type: 'ready' });
@@ -292,6 +326,7 @@ window.addEventListener('message', (event) => {
       textElements: message.textElements ?? [],
     };
     savedUri = message.previewUri;
+    documentKind = typeof message.kind === 'string' ? message.kind : 'vector-png';
     refreshPreview();
     refreshBackground();
     if (message.rootFill) refreshRootFill(message.rootFill.available === true, typeof message.rootFill.value === 'string' ? message.rootFill.value : '');
@@ -301,6 +336,7 @@ window.addEventListener('message', (event) => {
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+    scheduleSvgPreview();
   } else if (message.type === 'rootFill') {
     refreshRootFill(message.available === true, typeof message.value === 'string' ? message.value : '');
   } else if (message.type === 'toggleWordWrap') {
@@ -316,6 +352,7 @@ window.addEventListener('message', (event) => {
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+    scheduleSvgPreview();
   } else if (message.type === 'previewRendered') {
     previewState.editedRendered(message.uri, message.revision);
     refreshPreview();

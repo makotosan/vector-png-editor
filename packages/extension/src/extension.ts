@@ -5,7 +5,6 @@ import { detectPng } from './detect.ts';
 import { routeFor, routeForFile } from './routing.ts';
 import { openModeFor } from './openMode.ts';
 import { decodeSvgText, isSvgFileName, svgDocumentSize } from './svgSource.ts';
-import { createSvgPreviewRenderer } from './svgPreview.ts';
 import { createNodeSvgSaveDeps, saveSvgTextFile, SvgSaveConflictError } from './svgSave.ts';
 import { exportSvgAsVectorPng, formatProfileDiagnostics, type ProfileDiagnostic } from './export.ts';
 import { createCoreExportDeps, createCorePlainPngDeps } from './coreExport.ts';
@@ -376,27 +375,38 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     panel.webview.html = buildEditorHtml(assets);
 
     const documentKey = createHash('sha256').update(document.uri.toString()).digest('hex').slice(0, 16);
-    // Preview rendering differs by kind: a vector-png's edited source
-    // renders through the Core (which validates first), while a plain
-    // SVG renders as-is from a private file - the Core preview path
-    // cannot show a non-conforming SVG at all, and display is never
-    // blocked by the profile (Issue #47).
-    const renderer = document.kind === 'svg'
-      ? createSvgPreviewRenderer({ previewDir: previewDirUri.fsPath, documentKey })
-      : createCorePreviewRenderer({
-          pythonPath: await this.corePythonPath(),
-          previewDir: previewDirUri.fsPath,
-          width: document.width,
-          height: document.height,
-          documentKey,
-        });
-    const preview = new PreviewController(
-      renderer,
+    // Edited previews never travel as webview resources: in a real
+    // VS Code host the temporary preview files are refused with a
+    // 401 by the webview resource server (found in the Issue #18
+    // live check, 2026-10-29), while the saved file - a real
+    // workspace file - loads fine. So a vector-png's Core-rendered
+    // PNG is posted to the webview as a data URI, and a plain SVG's
+    // edited preview is rendered inside the webview itself from the
+    // model text (blob URL; the Core preview path validates first
+    // and cannot show a general SVG at all - Issue #47). Display is
+    // never blocked by the profile.
+    const preview = document.kind === 'svg' ? undefined : new PreviewController(
+      createCorePreviewRenderer({
+        pythonPath: await this.corePythonPath(),
+        previewDir: previewDirUri.fsPath,
+        width: document.width,
+        height: document.height,
+        documentKey,
+      }),
       (event) => {
         if (event.type === 'rendered') {
-          const uri = panel.webview.asWebviewUri(vscode.Uri.file(join(event.imagePath)))
-            .with({ query: `rev=${event.revision}` }).toString();
-          void panel.webview.postMessage({ type: 'previewRendered', revision: event.revision, uri });
+          void (async () => {
+            try {
+              const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(event.imagePath));
+              const uri = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
+              void panel.webview.postMessage({ type: 'previewRendered', revision: event.revision, uri });
+            } catch (error) {
+              void panel.webview.postMessage({
+                type: 'previewUnavailable', revision: event.revision,
+                message: error instanceof Error ? error.message : String(error),
+              });
+            }
+          })();
         } else if (event.type === 'invalid') {
           void panel.webview.postMessage({ type: 'previewInvalid', revision: event.revision, message: event.message });
         } else {
@@ -419,7 +429,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       void panel.webview.postMessage({ type: 'sourceSync', source });
       postRootFill();
       sendDiagnostics(source);
-      preview.schedule(source, -1);
+      preview?.schedule(source, -1);
     });
     const savedSubscription = document.onSaved(() => {
       void panel.webview.postMessage({ type: 'saved', previewUri: savedUri() });
@@ -443,7 +453,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     updateKindContext();
     // Show the Core-rendered edited preview for the untouched source too;
     // the pane still opens on the saved raster and never auto-switches.
-    if (document.pendingSource !== undefined) preview.schedule(document.pendingSource, 0);
+    if (document.pendingSource !== undefined) preview?.schedule(document.pendingSource, 0);
 
     // Issue #45 panel actions. A host-originated source change (root
     // fill, Format) goes through the same machinery as Normalize
@@ -543,6 +553,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       if (message.type === 'ready') {
         void panel.webview.postMessage({
           type: 'init',
+          kind: document.kind,
           previewUri: savedUri(),
           meta: document.kind === 'svg'
             ? `${document.width} x ${document.height} SVG source`
@@ -565,7 +576,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         document.pendingSource = next;
         sendDiagnostics(next);
         postRootFill();
-        preview.schedule(next, message.revision);
+        preview?.schedule(next, message.revision);
         document.syncSource(next, panelId); // Keep other panels in step.
         const applyPointer = (source: string | undefined) => {
           if (source !== undefined) document.syncSource(source);
@@ -620,7 +631,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       savedSubscription.dispose();
       noticeSubscription.dispose();
       viewStateSubscription.dispose();
-      preview.dispose();
+      preview?.dispose();
       if (this.activeEditorPanel === panel) this.activeEditorPanel = undefined;
     });
   }
