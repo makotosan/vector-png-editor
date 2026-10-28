@@ -437,7 +437,10 @@ centred on the chosen background, and a bottom action row of **Copy**
 | **Export** | **Export PNG**. The toggle labels read "Saved" /
 "Edited" for both document kinds (the state machine semantics are
 unchanged: the pane opens on the saved view and switches only
-manually). The styling follows the user's chosen design B (VS Code
+manually). When the edited render has not arrived yet or has
+failed, the pane hides the image and the status line explains the
+state (rendering, none yet, or the failure) instead of leaving a
+broken-image placeholder. The styling follows the user's chosen design B (VS Code
 dark-theme fusion): every colour is a VS Code theme CSS variable
 (`--vscode-editor-background`, `--vscode-sideBar-background`,
 `--vscode-panel-border`, `--vscode-button-background`,
@@ -537,8 +540,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 166 tests with 0 failures
-and 12 skips by default, and 178 of 178 with a real Core (the
+Verification: the extension suite passes 167 tests with 0 failures
+and 12 skips by default, and 179 of 179 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
