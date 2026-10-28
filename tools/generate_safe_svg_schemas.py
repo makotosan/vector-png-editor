@@ -80,11 +80,12 @@ def _children(policy: dict, element: str) -> list[str]:
 
 
 def generate_rng(policy: dict) -> str:
+    id_pattern = policy["id_pattern"].replace("-", "\\-")
     attrs = []
     for name in policy["attributes"]:
         if name == "id":
             value = ('<data type="string" datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">'
-                     f'<param name="pattern">{policy["id_pattern"].replace("-", "\\-")}</param></data>')
+                     f'<param name="pattern">{id_pattern}</param></data>')
         else:
             value = "<text/>"
         attrs.append(f'      <optional><attribute name="{name}">{value}</attribute></optional>')
@@ -209,7 +210,7 @@ def manifest(policy: dict, artifacts: dict[str, str]) -> str:
         },
         "policy": {
             "file": "safe-svg-v1.policy.yaml",
-            "sha256": hashlib.sha256(POLICY.read_bytes()).hexdigest(),
+            "sha256": hashlib.sha256(POLICY.read_bytes().replace(b"\r\n", b"\n")).hexdigest(),
         },
         "artifacts": {
             name: hashlib.sha256(text.encode("utf-8")).hexdigest()
