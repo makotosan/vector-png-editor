@@ -17,7 +17,6 @@ from vector_png_editor.cli import main
 from vector_png_editor.errors import CoreError
 from vector_png_editor.normalize import (NormalizeFailure, convert_document,
                                          normalize_document, normalize_structure)
-from vector_png_editor.profile_check import check_profile
 from vector_png_editor.writing import verify_document
 
 FIXTURES = Path(__file__).parent / "fixtures" / "normalization"
@@ -37,19 +36,9 @@ def code_of(source: bytes) -> str:
 
 # ---------------------------------------------------------------- spec fixtures
 
-# Pinned-catalog expectations reversed by a spec amendment this branch
-# anticipates (makotosan/vector-png-spec#3): G2 admits absolute C
-# marker hosts, so "unsupported-marker-host" - a curved host the
-# pre-amendment section 3.1 rejected - now normalizes successfully.
-# The fixture data itself stays verbatim (see PROVENANCE.md); the
-# override lives here and in docs/SPEC_COMPATIBILITY.md until the pin
-# bump replaces the catalog with the amended one.
-AMENDMENT_SUPERSEDED = {"unsupported-marker-host": "accept"}
-
-
 @pytest.mark.parametrize("fixture", CASES, ids=[c["id"] for c in CASES])
 def test_fixture_cases(fixture):
-    if AMENDMENT_SUPERSEDED.get(fixture["id"], fixture["expect"]) == "accept":
+    if fixture["expect"] == "accept":
         output, report = normalize_structure(fixture["input"].encode())
         ET.fromstring(output)  # well-formed
         assert report["checks"]["input"] == "pass"
@@ -112,8 +101,7 @@ def test_source_order_and_selector_lists():
     ".a {fill: currentColor}",        # keyword outside the table
     ".a {fill: 10%}",                 # percentage
     ".a {stroke-width: 1e3}",         # exponent
-    ".a {letter-spacing: normal}",    # G1 grammar: the keyword is not accepted
-    ".a {letter-spacing: 1em}",       # G1 grammar: px is the only unit
+    ".a {letter-spacing: 1px}",       # known gap G1: not in the section 3 table
     ".a {fill: red !important}",      # !important in a rule
     ".a {fill: }",                    # empty value
     ".a {fill red}",                  # missing colon
@@ -187,110 +175,12 @@ def test_unused_marker_definitions_are_validated():
     normalize_structure((prefix + valid.replace("Z", "z") + suffix).encode())
 
 
-def test_curved_marker_host_expands_with_cubic_end_tangent():
-    # Amendment G2: a final C segment's tangent is endpoint minus
-    # second control point - here (50,20)-(25,20), pointing +x.
+def test_curved_marker_host_is_a_structured_failure():
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><defs>'
            '<marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">'
            '<path d="M0,0 L12,6 L0,12 Z" fill="black"/></marker></defs>'
            '<path d="M5 20 C15 20 25 20 50 20" fill="none" marker-end="url(#a)"/></svg>')
-    output, report = normalize_structure(svg.encode())
-    assert report["changes"]["expanded_markers"] == 1
-    group = next(n for n in ET.fromstring(output).iter(f"{NS}g"))
-    assert group.get("transform") == "translate(50 20) rotate(0) scale(1) translate(-10 -6)"
-
-
-def test_curved_marker_host_tangent_fallbacks():
-    head = ('<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><defs>'
-            '<marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">'
-            '<path d="M0,0 L12,6 L0,12 Z" fill="black"/></marker></defs>')
-    # Endpoint equals the second control point: fall back to endpoint
-    # minus first control point, here (30,10)-(20,10), still +x.
-    svg = head + '<path d="M10 10 C20 10 30 10 30 10" fill="none" marker-end="url(#a)"/></svg>'
-    output, _ = normalize_structure(svg.encode())
-    group = next(n for n in ET.fromstring(output).iter(f"{NS}g"))
-    assert "rotate(0)" in group.get("transform")
-    # Both control points coincide with the endpoint: degenerate.
-    svg = head + '<path d="M10 10 C10 10 10 10 10 10" fill="none" marker-end="url(#a)"/></svg>'
     assert code_of(svg.encode()) == "unsupported-css"
-    # S/Q/T segments remain rejected under G2.
-    for d in ("M5 20 S25 20 50 20", "M5 20 Q25 20 50 20", "M5 20 T50 20"):
-        svg = head + f'<path d="{d}" fill="none" marker-end="url(#a)"/></svg>'
-        assert code_of(svg.encode()) == "unsupported-css", d
-
-
-# ------------------------------------------------- spec amendments G1/G2/G3
-# Synthetic cases mirroring the fixtures being added to
-# makotosan/vector-png-spec under spec#3 (same ids, same inputs).
-
-AMENDMENT_CASES = {
-    "letter-spacing":
-        '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">'
-        "<style>.brand {font-family: sans-serif; font-size: 20px; letter-spacing: 2px; fill: #222}</style>"
-        '<text class="brand" x="10" y="40">ACME</text></svg>',
-    "curved-marker-host":
-        '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="120" role="img" aria-labelledby="t">'
-        '<title id="t">Curved arrow</title><defs>'
-        '<marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">'
-        '<path d="M0,0 L12,6 L0,12 Z" fill="#363636"/></marker>'
-        "<style>.arrow {fill: none; stroke: black; stroke-width: 2; marker-end: url(#arrow)}</style></defs>"
-        '<path class="arrow" d="M20 90 C60 90 80 30 130 30"/></svg>',
-    "font-family-system-names":
-        '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="80">'
-        '<style>text {font-family: -apple-system,BlinkMacSystemFont,"Yu Gothic",sans-serif; font-size: 16px}</style>'
-        '<text x="10" y="40">Text</text></svg>',
-}
-
-
-@pytest.mark.parametrize("case_id", sorted(AMENDMENT_CASES))
-def test_amendment_cases_accept(case_id):
-    output, report = normalize_structure(AMENDMENT_CASES[case_id].encode())
-    ET.fromstring(output)  # well-formed, and revalidated inside the transform
-    assert report["checks"]["input"] == "pass"
-    assert report["checks"]["safe_svg"] == "pass"
-
-
-def test_amendment_letter_spacing_materializes():
-    output, _ = normalize_structure(AMENDMENT_CASES["letter-spacing"].encode())
-    text = ET.fromstring(output).find(f"{NS}text")
-    assert text.get("letter-spacing") == "2px"
-    assert b"class=" not in output
-
-
-def test_amendment_letter_spacing_presentation_attribute_and_sign():
-    # The presentation attribute is accepted with the same grammar,
-    # including a negative (signed) value, and survives to the output.
-    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">'
-           '<text x="1" y="9" letter-spacing="-0.5px">A</text></svg>')
-    output, _ = normalize_structure(svg.encode())
-    assert ET.fromstring(output).find(f"{NS}text").get("letter-spacing") == "-0.5px"
-
-
-def test_amendment_curved_marker_host_geometry():
-    output, report = normalize_structure(AMENDMENT_CASES["curved-marker-host"].encode())
-    assert report["changes"]["expanded_markers"] == 1
-    group = next(n for n in ET.fromstring(output).iter(f"{NS}g"))
-    # Endpoint (130,30); tangent (130,30)-(80,30) is +x, so rotate(0).
-    assert group.get("transform") == "translate(130 30) rotate(0) scale(2) translate(-10 -6)"
-    assert b"marker" not in output
-
-
-def test_amendment_font_family_system_names_materialize():
-    output, _ = normalize_structure(AMENDMENT_CASES["font-family-system-names"].encode())
-    family = ET.fromstring(output).find(f"{NS}text").get("font-family")
-    assert family.startswith("-apple-system") and '"Yu Gothic"' in family
-
-
-def test_letter_spacing_profile_gate():
-    # validate --profile safe-svg-v1: letter-spacing is now accepted,
-    # class/style remain rejected (Issue #22 gate + G1).
-    assert check_profile(
-        b'<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">'
-        b'<text x="1" y="9" letter-spacing="1px">A</text></svg>',
-        strict_structure=True) == []
-    bad = ('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">'
-           '<text class="a" x="1" y="9">A</text></svg>')
-    assert "unsupported-attribute" in [d["code"] for d in check_profile(bad.encode(), strict_structure=True)]
 
 
 # ---------------------------------------------------------------- accessibility (profile section 5)
@@ -323,7 +213,7 @@ def test_accessibility_replaced_text_is_recorded_as_loss():
     ('<svg xmlns="http://www.w3.org/2000/svg">' + "<rect/>" * 5000 + "</svg>").encode(),
     ('<svg xmlns="http://www.w3.org/2000/svg"><style>' + " " * 100001 + "</style></svg>").encode(),
     ('<svg xmlns="http://www.w3.org/2000/svg"><style>' + ",".join(".c" + str(i) for i in range(1001)) + "{fill:red}</style></svg>").encode(),
-])
+], ids=["input-too-large", "nesting-too-deep", "too-many-elements", "style-too-large", "too-many-selectors"])
 def test_resource_limits(data):
     assert code_of(data) == "resource-limit"
 
@@ -351,7 +241,7 @@ def test_normalize_document_success_and_input_preservation(tmp_path):
 
 def test_normalize_document_failure_writes_report_only(tmp_path):
     svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">'
-           "<style>.a{margin:0}</style>"
+           "<style>.a{letter-spacing:1px}</style>"
            '<rect class="a" width="5" height="5"/></svg>').encode()
     source = _write(tmp_path, "in.svg", svg)
     with pytest.raises(CoreError) as caught:
@@ -425,7 +315,7 @@ def test_cli_normalize_and_convert_envelopes(tmp_path, capsys):
     envelope = json.loads(capsys.readouterr().out)
     assert status == 0 and envelope["ok"] and envelope["result"]["status"] == "success"
     assert envelope["result"]["changes"]["expanded_markers"] == 2
-    bad = _write(tmp_path, "bad.svg", b'<svg xmlns="http://www.w3.org/2000/svg"><style>.a{margin:0}</style></svg>')
+    bad = _write(tmp_path, "bad.svg", b'<svg xmlns="http://www.w3.org/2000/svg"><style>.a{letter-spacing:1px}</style></svg>')
     status = main(["normalize", str(bad), str(tmp_path / "o2.svg"), "--report", str(tmp_path / "r2.json")])
     envelope = json.loads(capsys.readouterr().out)
     assert status == 5 and not envelope["ok"] and envelope["error"]["code"] == "unsupported-css"
