@@ -37,6 +37,11 @@ def main(argv=None):
     validate.add_argument("--profile", choices=["safe-svg-v1"], help="Strict schema-profile gate with structured diagnostics (Issue #22)")
     verify = commands.add_parser("verify")
     verify.add_argument("png", type=Path)
+    for name in ("normalize", "convert"):
+        importer = commands.add_parser(name)
+        importer.add_argument("svg", type=Path)
+        importer.add_argument("output", type=Path)
+        importer.add_argument("--report", type=Path, required=True)
     for name, source_arg in (("build", "svg"), ("rebuild", "png")):
         writer = commands.add_parser(name)
         writer.add_argument(source_arg, type=Path)
@@ -57,7 +62,11 @@ def main(argv=None):
         if args.request_id is not None and len(args.request_id) > 128:
             raise CoreError("invalid-arguments", "request-id exceeds 128 characters")
         envelope["request_id"] = args.request_id
-        if args.command == "inspect":
+        if args.command in {"normalize", "convert"}:
+            from .normalize import convert_document, normalize_document
+            handler = normalize_document if args.command == "normalize" else convert_document
+            result = handler(args.svg, args.output, args.report)
+        elif args.command == "inspect":
             result = inspect_document(args.png)
         elif args.command == "extract":
             result = extract_source(args.png, args.output)

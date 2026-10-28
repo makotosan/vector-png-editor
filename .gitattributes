@@ -1,0 +1,6 @@
+# Checked-in files that tests compare byte-for-byte (schema copies,
+# vendored spec fixtures and their golden files) must keep LF line
+# endings on every platform; a Windows checkout (autocrlf) must not
+# drift the bytes and fail the comparisons.
+schemas/** text eol=lf
+packages/core/tests/fixtures/** text eol=lf
