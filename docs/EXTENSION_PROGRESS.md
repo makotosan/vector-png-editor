@@ -237,3 +237,26 @@ first environment. The TypeScript type check passed. Running the
 commands inside a live VS Code host remains P3 acceptance work, so
 P2-07 stays open until that evidence exists. This completes the P2
 series (P2-01 to P2-07).
+
+## Generated profile metadata in Monaco — v1.2 Phase 2
+
+The editor now consumes the generated safe-svg-v1 metadata instead of
+relying only on the mirrored constants. The extension host loads
+`schemas/safe-svg-v1.monaco.json` (generated from the policy; packaged
+under `media/schemas` by `scripts/copy-schemas.mjs`, or read from the
+repository checkout during development), parses it strictly, and
+sends elements, attributes, content models and text elements to the
+webview in the init message. Monaco completion inside an element is
+limited to that element's allowed children - for example, `stop` is
+offered only inside gradients - while attribute completion and the
+advisory diagnostics are unchanged. Missing or invalid metadata falls
+back to the mirrored constants in `profile.ts`, and the Python Core
+validator remains authoritative in all cases. The Codex Skill that
+drives generation from the same profile lives at
+`skills/vector-png/SKILL.md`; SC-10 exercises its workflow end to end.
+
+Local verification: the extension suite passes with the new
+profile-data tests (canonical metadata parity with the mirrored
+profile, content-model child sets, rejection of foreign profiles),
+and the TypeScript check passes. Live VS Code host confirmation
+remains part of the P3 acceptance work (Issue #18).

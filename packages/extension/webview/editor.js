@@ -7,7 +7,32 @@ const config = JSON.parse(document.getElementById('vpe-config').textContent);
 
 let editor = null;
 let monacoRef = null;
-let profile = { elements: [], attributes: [] };
+let profile = { elements: [], attributes: [], children: {}, textElements: [] };
+
+// The innermost element still open at the start of `text` (the model
+// text before the cursor), or null at the top level. Text scan only -
+// never a DOM - matching the extension's diagnostics approach.
+function enclosingElement(text) {
+  const stack = [];
+  const tagPattern = /<(\/?)([A-Za-z][A-Za-z0-9._-]*)((?:\s+[^\s=/>]+(?:\s*=\s*(?:"[^"]*"|'[^']*'))?)*)\s*(\/?)>/g;
+  for (const match of text.matchAll(tagPattern)) {
+    if (match[1] === '/') {
+      if (stack[stack.length - 1] === match[2]) stack.pop();
+    } else if (match[4] !== '/') {
+      stack.push(match[2]);
+    }
+  }
+  return stack.length ? stack[stack.length - 1] : null;
+}
+
+function elementSuggestions(model, position) {
+  const offset = model.getOffsetAt(position);
+  const parent = enclosingElement(model.getValue().slice(0, offset));
+  const allowed = parent !== null && Array.isArray(profile.children[parent])
+    ? profile.children[parent]
+    : profile.elements;
+  return allowed;
+}
 const previewState = window.VpePreviewState.createPreviewState();
 let savedUri = '';
 
@@ -63,7 +88,7 @@ require(['vs/editor/editor.main'], (monaco) => {
       const inTag = /<[^>]*$/.test(line);
       const items = inTag && /\s[^<]*$/.test(line)
         ? profile.attributes.map(a => ({ label: a, kind: monaco.languages.CompletionItemKind.Property, insertText: `${a}="$0"`, insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet, range }))
-        : profile.elements.map(e => ({ label: e, kind: monaco.languages.CompletionItemKind.Class, insertText: e, range }));
+        : elementSuggestions(model, position).map(e => ({ label: e, kind: monaco.languages.CompletionItemKind.Class, insertText: e, range }));
       return { suggestions: items };
     },
   });
@@ -81,7 +106,12 @@ window.addEventListener('message', (event) => {
   const message = event.data;
   if (!message || typeof message !== 'object') return;
   if (message.type === 'init') {
-    profile = { elements: message.elements ?? [], attributes: message.attributes ?? [] };
+    profile = {
+      elements: message.elements ?? [],
+      attributes: message.attributes ?? [],
+      children: message.children ?? {},
+      textElements: message.textElements ?? [],
+    };
     savedUri = message.previewUri;
     refreshPreview();
     document.getElementById('meta').textContent = message.meta;

@@ -67,6 +67,16 @@ write path remains the revision-checked atomic build (P1-03/P2-04).
 
 Phase 0 and Phase 1 are implemented, with SC-01 to SC-09, SC-11 and
 SC-12 exercised in `packages/core/tests/test_safe_svg_schema.py`.
-Phase 2 (Codex Skill text, Monaco consumption of the metadata in the
-editor) and SC-10's end-to-end generation run remain; SC-10's
-mechanics are already covered by the P3-01 CLI roundtrip tests.
+Phase 2 is implemented as well: `skills/vector-png/SKILL.md` carries
+the generation procedure (read the rules, generate XML directly,
+validate, fix and re-validate, build with the inspected revision,
+verify), and the editor's Monaco completion now consumes the
+generated metadata - the host loads `safe-svg-v1.monaco.json`
+(packaged under `media/schemas`, or the repo `schemas/` in a
+checkout) and completion inside an element is limited to that
+element's allowed children. SC-10 runs end to end in
+`tests/integration/test_skill_workflow.py`, including the rule that a
+non-conforming SVG never overwrites an existing PNG. What remains
+for Issue #22 is only the Phase 3 cross-platform confirmation of the
+full SC matrix in CI (the Core matrix already exercises the schema
+tests on all three OSes).
