@@ -447,7 +447,9 @@ companions) collected in a single `:root` block in
 family, #252526 panel, #3c3c3c borders, #0e639c accent) only as
 `var()` fallbacks, so the page follows the active colour theme.
 Save and Export PNG are the primary accent buttons; everything else
-is a secondary button; the checkerboard is a translucent-grey
+is a secondary button; every button carries a visible
+rounded-rectangle outline (the reference UI's button style, 6px
+radius, `--vpe-btn-border` / `--vpe-btn-radius`); the checkerboard is a translucent-grey
 `repeating-conic-gradient` that reads as dark greys on a dark panel
 and light greys on a light one. The Monaco code area follows the
 same theme: the theme class VS Code stamps on the webview body

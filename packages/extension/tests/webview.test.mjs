@@ -109,4 +109,7 @@ test('editor CSS follows the VS Code theme variables with design-B dark fallback
   assert.match(css, /--vpe-checker: repeating-conic-gradient\(rgba\(128, 128, 128/);
   assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export PNG is the primary action');
   assert.match(css, /#tool-save \{[^}]*background: var\(--vpe-accent\)/, 'Save is the primary toolbar action');
+  assert.match(css, /--vpe-btn-border: var\(--vscode-button-border, #858585\)/, 'buttons get a visible outline colour');
+  assert.match(css, /--vpe-btn-radius: 6px/, 'buttons are rounded rectangles');
+  assert.match(css, /button \{[^}]*border: 1px solid var\(--vpe-btn-border\); border-radius: var\(--vpe-btn-radius\)/, 'every button is a rounded-rect outline');
 });
