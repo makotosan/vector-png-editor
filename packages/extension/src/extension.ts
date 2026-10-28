@@ -15,6 +15,7 @@ import { saveInPlace, saveAs } from './save.ts';
 import { createCoreSaveDeps } from './coreSave.ts';
 import { SourceHistory } from './history.ts';
 import { writeBackup, readBackup, deleteBackup } from './backup.ts';
+import { ExternalChangeTracker } from './watch.ts';
 
 export const VIEW_TYPE = 'vectorPng.editor';
 
@@ -26,6 +27,16 @@ class VectorPngDocument implements vscode.CustomDocument {
   saveSequence = 0;
   // The authoritative edit history (P2-05). Created with the document.
   history: SourceHistory = new SourceHistory('');
+  // External-change tracking (P2-06). Created with the document.
+  tracker: ExternalChangeTracker = new ExternalChangeTracker('');
+  private readonly disposables: vscode.Disposable[] = [];
+  private readonly noticeListeners = new Set<(text: string) => void>();
+  trackDisposable(disposable: vscode.Disposable): void { this.disposables.push(disposable); }
+  notifyNotice(text: string): void { for (const listener of this.noticeListeners) listener(text); }
+  onNotice(listener: (text: string) => void): vscode.Disposable {
+    this.noticeListeners.add(listener);
+    return { dispose: () => this.noticeListeners.delete(listener) };
+  }
   private readonly sourceListeners = new Map<symbol, (source: string) => void>();
   private readonly savedListeners = new Set<() => void>();
   constructor(
@@ -57,6 +68,9 @@ class VectorPngDocument implements vscode.CustomDocument {
   dispose(): void {
     this.sourceListeners.clear();
     this.savedListeners.clear();
+    this.noticeListeners.clear();
+    for (const disposable of this.disposables) disposable.dispose();
+    this.disposables.length = 0;
   }
 }
 
@@ -70,9 +84,9 @@ type VectorPngEdit = {
 // debounced Core-rendered previews and the manual toggle are P2-03; the
 // source-preserving save lifecycle through the Core is P2-04; the
 // authoritative undo/redo history, backup recovery and multi-panel
-// synchronization are P2-05. External-change watching is P2-06; the
-// save path itself already refuses to overwrite a changed destination
-// without its current revision token.
+// synchronization are P2-05; external-change watching with revision
+// tokens, clean reload, dirty preservation and explicit conflict
+// resolution at save is P2-06.
 class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDocument> {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<VectorPngDocument>>();
   readonly onDidChangeCustomDocument = this.changeEmitter.event;
@@ -96,7 +110,77 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     document.pendingSource = document.extracted.text;
     document.savedSource = document.extracted.text;
     document.history = new SourceHistory(document.extracted.text);
+    document.tracker = new ExternalChangeTracker(createHash('sha256').update(bytes).digest('hex'));
+    this.watchDocument(document);
     return document;
+  }
+
+  private watchDocument(document: VectorPngDocument): void {
+    const folder = vscode.Uri.joinPath(document.uri, '..');
+    const name = document.uri.path.split('/').pop() ?? '';
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, name));
+    document.trackDisposable(watcher.onDidChange(() => void this.handleDiskChange(document)));
+    document.trackDisposable(watcher.onDidCreate(() => void this.handleDiskChange(document)));
+    document.trackDisposable(watcher.onDidDelete(() => void this.handleDiskDelete(document)));
+    document.trackDisposable(watcher);
+  }
+
+  private async readDiskState(document: VectorPngDocument): Promise<{ bytes: Uint8Array; sha: string } | undefined> {
+    try {
+      const bytes = await vscode.workspace.fs.readFile(document.uri);
+      return { bytes, sha: createHash('sha256').update(bytes).digest('hex') };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async reloadFromDisk(document: VectorPngDocument): Promise<boolean> {
+    const state = await this.readDiskState(document);
+    if (!state) return false;
+    let extracted: ExtractedSource;
+    try {
+      const detection = detectPng(state.bytes);
+      if (detection.kind !== 'vector-png') return false;
+      extracted = extractSource(state.bytes);
+    } catch {
+      return false;
+    }
+    document.extracted = extracted;
+    document.savedSource = extracted.text;
+    document.history.reset(extracted.text);
+    document.tracker.noteReloaded(state.sha);
+    document.syncSource(extracted.text);
+    document.notifySaved();
+    return true;
+  }
+
+  private async handleDiskChange(document: VectorPngDocument): Promise<void> {
+    const state = await this.readDiskState(document);
+    if (!state) { void this.handleDiskDelete(document); return; }
+    const dirty = document.history.isDirty(document.savedSource ?? '');
+    // Never reload unchecked content: an unparsable change conflicts.
+    let parseable = false;
+    try { parseable = detectPng(state.bytes).kind === 'vector-png'; } catch { parseable = false; }
+    const decision = parseable
+      ? document.tracker.observe(state.sha, dirty)
+      : document.tracker.observeUnreadable();
+    if (decision === 'reload') {
+      if (await this.reloadFromDisk(document))
+        document.notifyNotice('Reloaded after an external change');
+    } else if (decision === 'conflict') {
+      document.notifyNotice('This file changed on disk. Your unsaved edits are preserved; saving will ask how to resolve it.');
+      void vscode.window.showWarningMessage(
+        'Vector PNG: the file changed on disk. Your unsaved edits are preserved and will not be overwritten silently.');
+    }
+  }
+
+  private async handleDiskDelete(document: VectorPngDocument): Promise<void> {
+    const dirty = document.history.isDirty(document.savedSource ?? '');
+    const decision = document.tracker.observe(null, dirty);
+    if (decision === 'deleted')
+      document.notifyNotice('This file was deleted on disk');
+    else if (decision === 'conflict')
+      document.notifyNotice('This file was deleted on disk. Your unsaved edits are preserved; save to recreate it or use Save As.');
   }
 
   async openCustomDocumentBackup(backupId: string): Promise<VectorPngDocument> {
@@ -174,6 +258,9 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const savedSubscription = document.onSaved(() => {
       void panel.webview.postMessage({ type: 'saved', previewUri: savedUri() });
     });
+    const noticeSubscription = document.onNotice((text) => {
+      void panel.webview.postMessage({ type: 'notice', text });
+    });
     // Show the Core-rendered edited preview for the untouched source too;
     // the pane still opens on the saved raster and never auto-switches.
     if (document.pendingSource !== undefined) preview.schedule(document.pendingSource, 0);
@@ -221,6 +308,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       subscription.dispose();
       syncSubscription.dispose();
       savedSubscription.dispose();
+      noticeSubscription.dispose();
       preview.dispose();
     });
   }
@@ -228,16 +316,46 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   async saveCustomDocument(document: VectorPngDocument, cancellation: vscode.CancellationToken): Promise<void> {
     const source = document.pendingSource;
     if (source === undefined) throw new Error('Nothing to save');
+    // P2-06: a known external conflict must be resolved explicitly -
+    // a plain save never silently overwrites the external version.
+    if (document.tracker.isConflicted && !document.tracker.isDeleted) {
+      const choice = await vscode.window.showErrorMessage(
+        'This file changed on disk since it was opened. Your version and the disk version both still exist.',
+        { modal: true }, 'Reload from disk', 'Overwrite the external change', 'Save As...');
+      if (choice === 'Reload from disk') {
+        if (await this.reloadFromDisk(document)) return; // Adopted the disk version; nothing left to save.
+        throw new Error('Could not reload the changed file; your edits are preserved');
+      }
+      if (choice === 'Save As...') {
+        const target = await vscode.window.showSaveDialog({ filters: { 'Vector PNG': ['png'] }, saveLabel: 'Save As' });
+        if (!target) throw new Error('Save cancelled');
+        await this.saveCustomDocumentAs(document, target, cancellation);
+        return;
+      }
+      if (choice !== 'Overwrite the external change') throw new Error('Save cancelled');
+      document.tracker.resolveOverwrite();
+    }
+    const deps = createCoreSaveDeps(this.corePythonPath());
     try {
-      await saveInPlace(createCoreSaveDeps(this.corePythonPath()), document.uri.fsPath, {
-        source, width: document.width, height: document.height,
-        isCancelled: () => cancellation.isCancellationRequested,
-      });
+      if (document.tracker.isDeleted) {
+        // Recreate a file deleted on disk from the preserved buffer.
+        await saveAs(deps, document.uri.fsPath, {
+          source, width: document.width, height: document.height,
+          isCancelled: () => cancellation.isCancellationRequested,
+        });
+      } else {
+        await saveInPlace(deps, document.uri.fsPath, {
+          source, width: document.width, height: document.height,
+          isCancelled: () => cancellation.isCancellationRequested,
+        });
+      }
     } catch (error) {
       void vscode.window.showErrorMessage(`Vector PNG save failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error; // Throwing keeps the document dirty and the buffer intact.
     }
     document.savedSource = source;
+    const state = await this.readDiskState(document);
+    if (state) document.tracker.noteSaved(state.sha);
     document.notifySaved();
   }
 
@@ -263,6 +381,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     document.extracted = extracted;
     document.savedSource = extracted.text;
     document.history.reset(extracted.text);
+    document.tracker.noteReloaded(createHash('sha256').update(bytes).digest('hex'));
     document.syncSource(extracted.text);
     document.notifySaved();
   }
