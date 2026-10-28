@@ -63,3 +63,34 @@ and packaged-VSIX offline tests have not run yet; they remain part of the
 P3 acceptance work, so P2-02 stays open until that evidence exists. The
 editor model accepts edits and updates diagnostics, but persistence is
 still not wired: preview rendering is P2-03 and saving is P2-04.
+
+## Debounced previews and manual toggle — P2-03
+
+Edited previews are produced only by the Python Core. `src/preview.ts` is
+a framework-free controller: it renders after 300 ms idle, gives every
+schedule a generation, and discards any result that finishes after a
+newer edit was scheduled, so the latest source always wins even when
+workers finish out of order. `src/corePreview.ts` validates the edited
+source through the bridge package's `LatestValidation` lane and only
+then renders it with the Core `build` command into a private preview
+file; an invalid source is rejected before any rendering and is never
+shown. The preview file is never the user's document.
+
+The preview pane opens on the actual saved raster. Switching between
+"Saved PNG" and "Edited SVG" is manual only: `webview/preview-state.js`
+changes mode exclusively from the toggle buttons, and arriving preview
+results refresh the edited image without ever switching the mode. There
+is no automatic image diff or auto toggle.
+
+The Core is reached through the new `vectorPng.corePythonPath` setting
+(a Python 3.11-3.13 with the Core installed). Until the managed
+environment integration lands, an unset path makes edited previews
+report themselves unavailable while the saved preview keeps working.
+
+Local verification: 46 extension unit tests passed with a real Core
+(44 passed and 2 Core-integration tests skipped without one), covering
+fake-timer debounce, rapid edits, out-of-order completion, stale error
+dropping, hostile-source rejection by the real Core validator, the
+no-auto-toggle invariant and saved-raster fidelity; the TypeScript type
+check passed. Extension-host and packaged-VSIX tests remain P3
+acceptance work, so P2-03 stays open until that evidence exists.
