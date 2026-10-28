@@ -25,7 +25,8 @@
     "check": "tsc -p .",
     "test": "node --test tests/*.test.mjs",
     "bundle:monaco": "node scripts/copy-monaco.mjs",
-    "vscode:prepublish": "node scripts/copy-monaco.mjs"
+    "vscode:prepublish": "node scripts/copy-monaco.mjs && node scripts/copy-schemas.mjs",
+    "bundle:schemas": "node scripts/copy-schemas.mjs"
   },
   "devDependencies": {
     "@types/node": "24.10.1",
