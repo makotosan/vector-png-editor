@@ -443,13 +443,17 @@ compact toolbar with **Save** and **Format** buttons and the document
 meta line, over the Monaco editor with its existing diagnostics,
 completion and edit sync. On the right, a **Preview** panel: a header
 with background preset toggles (checkerboard / white / black), the
-**FILL** and **BACKGROUND** rows, the Saved/Edited preview toggle
+**FILL** and **BACKGROUND** rows, the PNG/Editing preview toggle
 with its status text, the preview stage with the rendered image
 centred on the chosen background, and a bottom action row of **Copy**
-| **Export** | **Export PNG**. The toggle labels read "Saved" /
-"Edited" for both document kinds (the state machine semantics are
-unchanged: the pane opens on the saved view and switches only
-manually). When the edited render has not arrived yet or has
+| **Export** | **Export PNG**. The toggle labels read "PNG" /
+"Editing" (user decision 2026-10-29, replacing "Saved" / "Edited",
+which fitted the two document kinds unequally): PNG shows the
+raster the file itself holds, Editing shows the live render of the
+current source, and the pane opens on Editing, switching only
+manually. For an SVG document the PNG button is disabled - an SVG
+file holds no PNG image - and a plain PNG keeps the Issue #46
+view-only page, which shows the PNG itself. When the editing render has not arrived yet or has
 failed, the pane hides the image and the status line explains the
 state (rendering, none yet, or the failure) instead of leaving a
 broken-image placeholder. The styling follows the user's chosen design B (VS Code
@@ -552,8 +556,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 166 tests with 0 failures
-and 12 skips by default, and 178 of 178 with a real Core (the
+Verification: the extension suite passes 167 tests with 0 failures
+and 12 skips by default, and 179 of 179 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -564,7 +568,8 @@ idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
 design-B CSS variables, the Monaco theme sync, the word-wrap toggle
-(the Toggle Word Wrap command and the Wrap button, persisted per panel), the edited-preview transport (no preview travels as a
+(the Toggle Word Wrap command and the Wrap button, persisted per panel), the PNG/Editing preview toggle (Editing opens by default, and
+the PNG button is disabled for SVG documents), the edited-preview transport (no preview travels as a
 webview-resource file; SVG previews are blob URLs built in the
 webview and Core PNG previews arrive as data URIs), and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,

@@ -72,8 +72,8 @@ test('word wrap toggles via the host command message and the Wrap button, persis
 test('preview pane hides the image instead of a broken icon while the edited render is missing (Issue #45)', async () => {
   const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
   assert.match(js, /img\.removeAttribute\('src'\);\n    img\.style\.display = 'none';/);
-  assert.match(js, /previewState\.editedRevision < revision \? 'Rendering the edited preview…' : ''/);
-  assert.match(js, /'No edited preview yet\.'/);
+  assert.match(js, /previewState\.editedRevision < revision \? 'Rendering the editing preview…' : ''/);
+  assert.match(js, /'No editing preview yet\.'/);
 });
 
 test('Toggle Word Wrap is a workbench command with an Alt+Z keybinding (Issue #45)', async () => {
@@ -111,8 +111,8 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
   assert.match(html, /id="fill-swatch" type="color"/);
   assert.match(html, /id="background-swatch" type="color"/);
   assert.match(html, /id="fill-apply" type="button">Apply</);
-  assert.match(html, /id="show-saved" type="button">Saved</);
-  assert.match(html, /id="show-edited" type="button">Edited</);
+  assert.match(html, /id="show-saved" type="button">PNG</);
+  assert.match(html, /id="show-edited" type="button">Editing</);
   assert.match(html, /id="action-copy" type="button">Copy</);
   assert.match(html, /id="action-export" type="button">Export</);
   assert.match(html, /id="action-export-png" type="button">Export PNG</);
@@ -152,4 +152,14 @@ test('edited previews never load as webview resources (Issue #47 follow-up)', as
     'a Core-rendered PNG preview is posted as a data URI');
   assert.match(host, /kind: document\.kind/, 'init tells the webview the document kind');
   assert.ok(!host.includes('createSvgPreviewRenderer'), 'the temporary-file SVG preview renderer is gone');
+});
+
+test('preview toggle opens on Editing; an SVG document disables the PNG view (Issue #45)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /if \(persistedPanel\.previewMode === 'saved'\) previewState\.showSaved\(\);/,
+    'only an explicitly persisted PNG choice restores the PNG view');
+  assert.match(js, /pngButton\.disabled = true;/, 'the PNG button is disabled for SVG documents');
+  assert.match(js, /An SVG file has no PNG image/, 'the disabled button explains itself');
+  const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
+  assert.match(css, /#preview-toggle button:disabled \{ opacity: 0\.45;/, 'the disabled PNG button is greyed out');
 });
