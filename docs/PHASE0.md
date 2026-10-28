@@ -68,3 +68,36 @@ python tools/check_planning.py
 Use a fresh output directory. The probe imports trusted local implementation code, parses fixture PNGs without rendering and writes per-fixture PNGs/results.json there. Never point it at untrusted Python. The source SHA in the result identifies exact local bytes; checkout line-ending conversion can change that hash without changing the Git blob's logical source. Planning checks only validate pins, bilingual body fields, pair structure and local links; they cannot prove semantic translation parity or product correctness.
 
 
+
+## P0-03 dependency and license verification (2026-10-28)
+
+The dependency inventory is now published in the repository-root
+[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md): all nine lock pins
+with license strings read from the installed distributions' metadata
+(Pillow MIT-CMU, CairoSVG LGPL-3.0-or-later, defusedxml PSFL, the BSD
+family cairocffi/cssselect2/tinycss2/webencodings, cffi MIT-0,
+pycparser BSD-3-Clause), native Cairo (LGPL-2.1/MPL-1.1 dual, never
+bundled), Monaco 0.57.0 (MIT, bundled by the extension), and the
+upstream MIT provenance preserved in the Core package. A Core test
+(`packages/core/tests/test_notices.py`) fails if the inventory drifts
+from the lock.
+
+Support matrix for the runtime (Core + bridge + managed environment),
+by evidence rather than declaration:
+
+| Cell | Evidence |
+| --- | --- |
+| Linux × Python 3.11 / 3.12 / 3.13 | core.yml CI matrix (all cells must pass for protected merges); the managed-environment manager test also runs per cell |
+| macOS × Python 3.11 / 3.12 / 3.13 | core.yml CI matrix, as above |
+| Windows × Python 3.11 / 3.12 / 3.13 | core.yml CI matrix, as above |
+| Linux × Python 3.12 clean-room (executed 2026-10-28) | Fresh venv installed from requirements.lock + the built 0.1.0.dev3 wheel with no pre-existing packages; gradient build and verify succeeded through the bridge protocol; native Cairo 1.18.0 |
+| Deviation / "upgrade" failure (executed 2026-10-28) | After installing tinycss2 1.4.0 over the lock, the version-vs-lock audit reported exactly that mismatch (installed 1.4.0 vs pinned 1.5.1) - the same comparison the environment manager uses to refuse activation |
+
+Explicitly unsupported or unverified: Python below 3.11 or 3.14 and
+later (the manager rejects them), any environment without a loadable
+native Cairo (health check fails with guidance; rendering is not
+claimed), source (non-wheel) installs of dependencies (the manager
+requires binary wheels), and real-machine VS Code acceptance on any
+OS, which remains P3-02 - CI cells are hosted evidence, not
+real-machine sign-off. The earlier Phase 0 note that Python 3.11/3.12
+and clean installation were untested is superseded by this section.

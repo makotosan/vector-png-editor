@@ -68,3 +68,19 @@ python tools/check_planning.py
 新しい出力directoryを使用します。probeは信頼したローカル実装codeをimportし、fixture PNGを描画せず解析し、fixtureごとのPNGとresults.jsonを出力します。信頼していないPythonを指定しないでください。結果のsource SHAは正確なローカルbyteを識別し、checkout時の改行変換でGit blobの論理sourceが同じでもhashは変わり得ます。planning checkはpin、日英body項目、組の構造、local linkのみを検査し、翻訳の意味一致や製品の正しさを証明できません。
 
 
+
+## P0-03 依存関係とライセンスの検証（2026-10-28）
+
+依存関係の一覧をリポジトリー直下の [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) に公開しました。9件のlock固定すべてに、導入済み配布物のメタデータから読んだライセンス文字列（Pillow MIT-CMU、CairoSVG LGPL-3.0-or-later、defusedxml PSFL、BSD系のcairocffi／cssselect2／tinycss2／webencodings、cffi MIT-0、pycparser BSD-3-Clause)、native Cairo（LGPL-2.1／MPL-1.1デュアル、同梱なし）、Monaco 0.57.0（MIT、拡張が同梱）、Coreパッケージに保持された上流MITの出典を含みます。Coreのテスト（`packages/core/tests/test_notices.py`）が、一覧とlockのずれを失敗として検出します。
+
+宣言ではなく証跡に基づく、ランタイム（Core＋bridge＋管理下環境）の対応表です。
+
+| セル | 証跡 |
+| --- | --- |
+| Linux × Python 3.11／3.12／3.13 | core.yml CI行列（保護されたマージには全セルの合格が必要）。管理下環境managerのテストもセルごとに実行 |
+| macOS × Python 3.11／3.12／3.13 | 同上（core.yml CI行列） |
+| Windows × Python 3.11／3.12／3.13 | 同上（core.yml CI行列） |
+| Linux × Python 3.12 クリーンルーム（2026-10-28に実行） | 既存パッケージのない新規venvへ requirements.lock とビルド済み0.1.0.dev3 wheelを導入し、bridgeプロトコル経由でグラデーションのbuildとverifyが成功。native Cairo 1.18.0 |
+| 逸脱／「アップグレード」失敗（2026-10-28に実行） | lockの上から tinycss2 1.4.0 を導入した後、版とlockの照合がちょうどその不一致（導入済み1.4.0対固定1.5.1）を報告。これは環境managerが有効化を拒否するのと同じ比較です |
+
+明示的に未対応・未検証のもの：Python 3.11未満と3.14以降（managerが拒否）、読み込み可能なnative Cairoのない環境（健全性検査が案内つきで失敗し、描画は主張しない）、依存関係のソース（非wheel）導入（managerはバイナリwheelを必須とする）、そして全OSでの実機VS Code受入（P3-02として残る。CIセルはホスト上の証跡であり実機承認ではない）。Phase 0初期の「Python 3.11/3.12とクリーン導入は未検証」という注記は、本節により置き換えられます。
