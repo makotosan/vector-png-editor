@@ -1,0 +1,23 @@
+name: Extension tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extension:
+    name: extension-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Type-check and unit-test the extension package
+        working-directory: packages/extension
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npm run check
+          npm test
