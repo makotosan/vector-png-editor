@@ -15,6 +15,8 @@
   "activationEvents": [
     "onCustomEditor:vectorPng.editor",
     "onCommand:vectorPng.openInEditor",
+    "onCommand:vectorPng.exportAsVectorPng",
+    "onCommand:vectorPng.normalizeSvg",
     "onCommand:vectorPng.newDocument",
     "onCommand:vectorPng.setupEnvironment",
     "onCommand:vectorPng.environmentStatus",
@@ -43,6 +45,9 @@
         "selector": [
           {
             "filenamePattern": "*.png"
+          },
+          {
+            "filenamePattern": "*.svg"
           }
         ],
         "priority": "option"
@@ -52,6 +57,14 @@
       {
         "command": "vectorPng.openInEditor",
         "title": "Vector PNG: Open in Editor"
+      },
+      {
+        "command": "vectorPng.exportAsVectorPng",
+        "title": "Vector PNG: Export as Vector PNG"
+      },
+      {
+        "command": "vectorPng.normalizeSvg",
+        "title": "Vector PNG: Normalize SVG"
       },
       {
         "command": "vectorPng.newDocument",
@@ -74,13 +87,42 @@
       "explorer/context": [
         {
           "command": "vectorPng.openInEditor",
-          "when": "resourceExtname == .png",
+          "when": "resourceExtname == .png || resourceExtname == .svg",
+          "group": "navigation"
+        },
+        {
+          "command": "vectorPng.exportAsVectorPng",
+          "when": "resourceExtname == .svg",
+          "group": "navigation"
+        },
+        {
+          "command": "vectorPng.normalizeSvg",
+          "when": "resourceExtname == .svg",
+          "group": "navigation"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "vectorPng.exportAsVectorPng",
+          "when": "activeCustomEditorId == vectorPng.editor",
+          "group": "navigation"
+        },
+        {
+          "command": "vectorPng.normalizeSvg",
+          "when": "activeCustomEditorId == vectorPng.editor && vectorPng.documentIsSvg",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "vectorPng.openInEditor"
+        },
+        {
+          "command": "vectorPng.exportAsVectorPng"
+        },
+        {
+          "command": "vectorPng.normalizeSvg",
+          "when": "vectorPng.documentIsSvg"
         },
         {
           "command": "vectorPng.newDocument"

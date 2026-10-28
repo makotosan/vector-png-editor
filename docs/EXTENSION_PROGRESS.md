@@ -306,3 +306,118 @@ TypeScript check passes. The manual VS Code check from the issue's
 test method (ordinary PNG, vector-png, corrupt vector-png and a
 renamed non-PNG, with before/after hashes) remains part of the P3
 real-machine acceptance work (Issue #18).
+
+## SVG open and vector-png export — Issue #47
+
+The custom editor now also opens plain `.svg` files (the selector
+gains `*.svg` under the same view type and `option` priority, so the
+default SVG experience is unchanged). An SVG document shares the PNG
+editing model - pending/saved source, undo/redo history, multi-panel
+synchronization, backup sidecar recovery and external-change
+tracking - with kind-specific acquisition and persistence: the source
+is the file's own UTF-8 text, the document size comes from the root's
+width/height attributes (else the viewBox, else the Core's default
+1024x1024 viewport) parsed by `src/svgSource.ts` with no new
+dependency, and saving writes the text back byte-exact as a plain
+UTF-8 write guarded by the same SHA-256 revision agreement the Core
+enforces for PNG saves (`src/svgSave.ts`) instead of a Core rebuild.
+Display is never blocked by safe-svg-v1 validation: diagnostics stay
+advisory in the source pane, and the edited preview renders the
+source as-is from a private file through the webview `<img>`
+(`src/svgPreview.ts`), because the Core preview path validates
+against the profile before rendering and cannot show a general SVG.
+No SVG markup enters the DOM and the restrictive CSP is unchanged.
+
+The new command `Vector PNG: Export as Vector PNG`
+(`vectorPng.exportAsVectorPng`; command palette, explorer context for
+`.svg`, editor context in this editor) exports the current source -
+the open document's possibly unsaved source, or the disk content for
+an unopened file - to the sibling `.png`, orchestrated by
+`src/export.ts` over the production dependencies in
+`src/coreExport.ts`. The source is validated through the Core
+`validate --profile safe-svg-v1`: a valid source exports through the
+Core `build` command with the save path's revision-token discipline
+(an existing target is replaced only after a modal Overwrite
+confirmation, under its current SHA-256; a plain PNG target is
+covered by the same confirmation). An invalid source writes nothing:
+the structured profile diagnostics (severity, code, element,
+attribute, line, column, message, suggestion) go to an error
+notification with a Show diagnostics action that opens them as a
+text document, and only an explicit Export via normalization choice
+runs the Core `convert` command (normalization with its rendering
+gate, then build). Because `convert` is strictly no-clobber, an
+existing target is moved aside first and restored verbatim if the
+conversion fails or throws, so a failed or declined export never
+leaves a partial or replaced PNG; the conversion report's
+accessibility-loss warnings are surfaced after a successful
+normalization export. The source `.svg` is never modified by an
+export. `validate --profile` and `convert` cannot be expressed over
+the protocol-1 transport, so they run through the Core's versioned
+JSON CLI under a bounded, shell-free spawn that mirrors the bridge's
+discipline, while `build` reuses the protocol runner exactly like
+saving; no Python Core changes were needed.
+
+Verification: the extension suite passes 105 tests with 0 failures
+and 10 skips by default (baseline on main: 79 passed, 8 skipped; the
+skip delta is two new Core-integration tests gated on
+VECTOR_PNG_TEST_PYTHON like the existing ones), and 115 of 115 with
+a real Core, including end-to-end exports through both the `build`
+route (embedded source round-trips byte-exact) and the `convert`
+route (normalized output, diagnostics presented first, source file
+untouched). New unit coverage: manifest registration, `.svg`
+routing, size parsing, as-is preview files, the text save round-trip
+and its conflict guard, and the export orchestration against fake
+dependencies (overwrite declined on both routes, failed-conversion
+restore, conflict surfacing). The TypeScript check passes. Live
+VS Code host confirmation (opening the nine corpus SVGs, unsaved-edit
+export, conflict dialogs) remains part of the P3 acceptance work
+(Issue #18); Issue #47 therefore stays open until that evidence
+exists.
+
+## Normalize SVG command — Issue #47 follow-up
+
+At the user's request, the same issue adds an explicit command,
+`Vector PNG: Normalize SVG` (`vectorPng.normalizeSvg`), that replaces
+an open `.svg` document's source with its normalized form. It is
+deliberately separate from open, save and export: normalization is
+an explicit operation in this project, never an automatic step. The
+command is enabled only for `.svg` documents in this editor (a
+`vectorPng.documentIsSvg` context key tracked from the active panel
+gates the palette and editor-context entries; the explorer entry
+targets `.svg` files), never for vector-png documents. Invoked on an
+unopened `.svg` file, it opens the file in the editor first and
+operates on the document; it never writes a file behind the editor's
+back.
+
+The Core `normalize` operation runs on the document's current source
+- unsaved edits included - writing its input, output and report to
+temp locations only (`src/normalize.ts`, `src/coreNormalize.ts`).
+Because the Core operation includes the svg-normalization-v1
+before/after rendering gate, a success is guaranteed to render
+pixel-identically to the source it replaced. The normalized text is
+applied as an ordinary edit through the history machinery: it lands
+as a single dirty, undoable change (one undo restores the
+pre-normalization source), and saving it uses the ordinary save flow
+with its conflict protection. A short summary drawn from the
+conversion report follows - declarations materialized, markers
+expanded, style elements and class attributes resolved,
+accessibility migrations - and any recorded accessibility losses are
+surfaced explicitly in a separate warning, so normalization never
+looks silent-lossless. When the output is byte-identical to the
+current source, the command reports the document as already
+normalized and makes no edit (no dirty state, no history entry).
+On any section 7 failure the document is left completely untouched
+and the failure is shown with its code and message, with the
+report's structured errors available in a diagnostics document -
+the same presentation discipline as the export validation failure.
+
+Verification: the suite passes 111 tests with 0 failures and 12
+skips by default (the two new real-Core tests gate on
+VECTOR_PNG_TEST_PYTHON like the existing integration tests), and
+123 of 123 with a real Core. The orchestration tests drive a
+document double backed by the real SourceHistory, proving the
+single undoable edit, the untouched-on-failure guarantee and the
+already-normalized no-op; the integration tests normalize a styled
+source end to end (its output is a fixed point) and surface an
+unsupported-css failure with its structured errors. Live host
+confirmation joins the Issue #18 acceptance list.
