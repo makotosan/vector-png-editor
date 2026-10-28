@@ -101,3 +101,64 @@ requires binary wheels), and real-machine VS Code acceptance on any
 OS, which remains P3-02 - CI cells are hosted evidence, not
 real-machine sign-off. The earlier Phase 0 note that Python 3.11/3.12
 and clean installation were untested is superseded by this section.
+
+## P0-01/P0-02 audit deepening (2026-10-28)
+
+The requirement-level audit of SPEC sections 2-4 and 6-8 was deepened
+with two probe suites in the Core tests, each test naming the section
+it evidences: `packages/core/tests/test_container_audit.py` (38
+probes) and `packages/core/tests/test_rendering_audit.py` (12
+probes). All 50 pass on the development host; they also run in the
+Core CI matrix.
+
+Container evidence (SPEC sections 2-4): trailing bytes after IEND,
+missing IEND, duplicate IHDR and over-declared chunk sizes are
+rejected; acTL, fcTL and fdAT are each rejected (beyond the single
+pinned APNG fixture); unknown critical chunks are rejected while
+unknown ancillary chunks are accepted and ignored, as PNG governs
+them; CRC corruption anywhere is rejected. The source keyword is
+exact and case-sensitive: duplicates across iTXt are rejected, the
+keyword in tEXt or zTXt is rejected (never first-or-last), and an
+iTXt after IDAT is accepted. The iTXt payload requires the compressed
+form; concatenated zlib streams, trailing bytes after the stream and
+truncated streams are rejected; PNG-valid language tags (en, ja,
+en-US, zh-Hant-TW, private-use) and UTF-8 translated keywords are
+accepted, non-ASCII tags and invalid UTF-8 translations rejected.
+Limits report as resource-limit, not invalid-container (4097-pixel
+side; SVG decompressing past 1,000,000 bytes). Palette, grayscale and
+hand-encoded Adam7 interlaced rasters are container-accepted, and an
+Adam7 re-encode of a render still verifies as an exact pixel match,
+confirming that verification compares decoded pixels, not PNG bytes.
+
+Explicit open audit item (P0-01): BCP 47 registry-level validation of
+the iTXt language tag is NOT performed. The reader checks only that
+the tag is ASCII, so registry-invalid tags such as `en_US`, `en--US`
+or an over-long first subtag are currently accepted (pinned as
+current behavior by the probes). SPEC section 3 requires accepting
+PNG-valid tags; whether registry-invalid tags must be rejected is a
+strictness decision for the user, recorded here rather than changed
+silently. A second documented behavior: rebuild does not retain
+unrelated ancillary chunks (SPEC section 6 permits but does not
+require retention).
+
+Rendering evidence (SPEC sections 5 and 7): transparency is exact
+under the bundled renderer (transparent background stays (0,0,0,0);
+fill-opacity 0.5 yields alpha 128; opaque stays 255). External
+references never reach the renderer: `url(http...)`, `url(data...)`
+and `image href` are rejected by validation first, and the render
+worker additionally installs a fetch-denying opener as defense in
+depth. Prohibited content (a script element) fails the build and
+leaves any existing file byte-identical - nothing is silently
+stripped. A renderer timeout maps to its own render-timeout
+category. Inspect and verify keep their claims separate: inspect
+reports the container only with the preview not checked; verify
+reports renderer, renderer version, viewport, fonts policy
+(host-selected), color/alpha handling and the exact-rgba8 comparison
+alongside the outcome.
+
+Still open after this deepening: decoder interoperability beyond
+Pillow (the reader's second opinion), external SVG test suites (not
+vendored), host-dependent font selection for text rendering, and a
+real-machine acceptance pass (P3-02). No complete conformance is
+claimed; these probes are finite evidence over the enumerated
+requirements.
