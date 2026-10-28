@@ -4,7 +4,7 @@
 
 ## 範囲と前提条件
 
-packages/bridge/src/environment.tsは、将来の拡張host向けにprepareEnvironment、activeEnvironment、runManagedCore、rollbackEnvironmentを提供します。テストしたTypeScript setup APIであり、導入可能なVS Code拡張や利用者向けsetup画面ではありません。Python自動検出、native Cairo導入、VSIXへの同梱、拡張hostテスト、release manifestは残課題です。P1-04／P2-07は一部実装で、製品全体・安定版は未完成です。
+packages/bridge/src/environment.tsはprepareEnvironment、activeEnvironment、runManagedCore、rollbackEnvironmentを提供します。P2-07以降、VS Code拡張がPython自動検出と利用者向けsetupコマンド（後述）でこのmanagerを統合しています。native Cairo導入、Core wheelのVSIX同梱、拡張hostテスト、release manifestは残課題で、製品全体・安定版は未完成です。
 
 信頼済みの絶対Python実行パス、Python 3.11〜3.13、そのinterpreter用に設定したnative Cairo、信頼済みvector-png-editor-coreのpure-Python wheel、このリポジトリーの[requirements.lock](../requirements.lock)を使います。wheelとlockの両方に、信頼済み呼び出し側設定から与える小文字SHA-256期待値が必要です。任意のdownload自体から計算したdigestは、その出所を認証しません。runtimeテストはNode 24内蔵のTypeScript型除去を使い、静的型検査・buildやVS CodeのNode互換性は主張しません。このAPIは同梱Python・native library・fontを導入しません。
 
@@ -37,3 +37,9 @@ EnvironmentErrorはcode、stage、最大2000 UTF-16 code unitsのmessageを公�
 失敗candidate環境、setup snapshot、cache、完成した旧環境は調査用に残します。使用中interpreterを削除する自動garbage collectionはありません。処理可能な失敗ではsetup.lockを解放しますが、強制終了で古いlockや一時pointer fileが残る可能性があります。setup processが動いていないことを確認してから、アプリ所有の残存物を手動復旧します。setup失敗だけを理由に選択・previous環境を削除してはいけません。native Cairoは別途設定し、native／描画失敗を解消してからcandidateを選択します。
 
 統合テストでは、空白と日本語を含むパスで実際の専用環境を構築し、実描画を検査し、周囲のPython変数を不正にしたCore呼び出し、並行setup、offline・不正wheel・不健全wheel・取消candidateでのactive.json保持、独立構築した2環境の切替、切り戻し、原文保持を検証します。単体・障害テストは版範囲方針、Python不在、digest／lock失敗、path traversal、古いlock、切り戻し先欠落・未準備、process取消・timeoutを対象とします。成功する2環境は同じCore版を含む場合があり、環境置換と切り戻しの検査であって、公開版間の移行検査ではありません。[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)と今回のPRに実行結果を記録します。OS／Python全9組のCIでも既存Core・bridge・package検査とともに、作成wheelに対する実際の管理テストを実行します。hostedテストであり、実機VS Code受け入れではありません。
+
+## 拡張コマンド（P2-07）
+
+拡張は3つのコマンドを追加します。**Vector PNG: Set Up Python Environment** は、通常のinterpreter候補（Windowsでは `py -3.13/-3.12/-3.11/-3`、その他では `python3.13`、`python3.12`、`python3.11`、`python3`、`python`）を隔離した `-I -c` の版probeで調べます。検出は何も変更しません。見つからない場合（Python不在、または未対応版のみ）は、プラットフォーム別の導入案内とともに説明します。対応interpreterがあれば、信頼できるCore成果物（`vectorPng.coreWheelPath` 設定、なければ拡張の `managed/` ディレクトリーに同梱されたwheel、なければ兄弟checkoutの `packages/core/dist`）を特定し、ネットワーク使用前に確認を取り（既定はローカルwheelhouseのみのoffline）、進行表示と取消つきで上記managerを実行します。失敗・取消では、それまで有効だった環境と全ての文書は無傷のままです。**Vector PNG: Python Environment Status** は設定済み・管理下・実効のinterpreterを表示します。**Vector PNG: Roll Back Python Environment** はmanagerの健全性検査付きrollbackへ委譲します。
+
+プレビューと保存のPython解決順は、`vectorPng.corePythonPath` 設定があればそれ、なければ管理下環境の有効なinterpreter、どちらもなければ利用不可（保存済みPNGプレビューは動き続けます）です。破損した環境storeはfail-closedとし、管理下環境なしとして扱い、推測はしません。拡張はパッケージ用にリポジトリーの `requirements.lock` のコピーを `packages/extension/managed/` に同梱し、テストが正本lockとバイト単位で同一に保ちます。
