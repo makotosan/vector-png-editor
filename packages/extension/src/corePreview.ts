@@ -24,7 +24,7 @@ export function createCorePreviewRenderer(options: CorePreviewOptions): PreviewR
   return async (source: string, revision: number): Promise<string> => {
     const python = options.pythonPath?.trim();
     if (!python)
-      throw new PreviewUnavailableError('Edited preview needs the Python Core: set "vectorPng.corePythonPath" to a Python 3.11-3.13 with vector-png-editor installed. The managed environment integration is tracked separately.');
+      throw new PreviewUnavailableError('Edited preview needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed.');
     const sourceBase64 = Buffer.from(source, 'utf8').toString('base64');
     const requestId = `preview-${options.documentKey}-${revision}`;
     let validation;
