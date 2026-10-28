@@ -1,4 +1,5 @@
 import { MAX_SVG_BYTES } from './profile.ts';
+import { MAX_FILL_VALUE_CHARS } from './rootFill.ts';
 
 // Bounded, schema-checked messages from the webview to the extension host.
 // Anything malformed, oversized or unexpected is rejected, never coerced.
@@ -6,11 +7,22 @@ export type PreviewMode = 'saved' | 'edited';
 export type WebviewMessage =
   | { type: 'ready' }
   | { type: 'sourceChanged'; revision: number; source: string }
-  | { type: 'setPreviewMode'; mode: PreviewMode };
+  | { type: 'setPreviewMode'; mode: PreviewMode }
+  // Code toolbar and Preview panel actions (Issue #45). The action
+  // messages carry no payload: the host acts on the document it
+  // already holds, never on data the webview supplies.
+  | { type: 'saveDocument' }
+  | { type: 'formatSource' }
+  | { type: 'copySource' }
+  | { type: 'exportSource' }
+  | { type: 'exportPng' }
+  | { type: 'applyRootFill'; value: string };
 
 export type MessageValidation = { ok: true; message: WebviewMessage } | { ok: false; reason: string };
 
 const MAX_MESSAGE_CHARS = MAX_SVG_BYTES + 4096;
+
+const NO_FIELD_MESSAGES = new Set(['ready', 'saveDocument', 'formatSource', 'copySource', 'exportSource', 'exportPng']);
 
 export function validateWebviewMessage(value: unknown, serializedSize?: number): MessageValidation {
   if (typeof value !== 'object' || value === null || Array.isArray(value))
@@ -19,9 +31,18 @@ export function validateWebviewMessage(value: unknown, serializedSize?: number):
     return { ok: false, reason: 'Message exceeds the size limit' };
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
-  if (record.type === 'ready') {
-    if (keys.length !== 1) return { ok: false, reason: 'ready takes no fields' };
-    return { ok: true, message: { type: 'ready' } };
+  if (typeof record.type === 'string' && NO_FIELD_MESSAGES.has(record.type)) {
+    if (keys.length !== 1) return { ok: false, reason: `${record.type} takes no fields` };
+    return { ok: true, message: { type: record.type } as WebviewMessage };
+  }
+  if (record.type === 'applyRootFill') {
+    if (keys.join(',') !== 'type,value') return { ok: false, reason: 'applyRootFill fields mismatch' };
+    if (typeof record.value !== 'string') return { ok: false, reason: 'fill value must be a string' };
+    if (record.value.length > MAX_FILL_VALUE_CHARS)
+      return { ok: false, reason: 'fill value exceeds the length limit' };
+    if (/[\u0000-\u001F\u007F]/.test(record.value))
+      return { ok: false, reason: 'fill value contains control characters' };
+    return { ok: true, message: { type: 'applyRootFill', value: record.value } };
   }
   if (record.type === 'setPreviewMode') {
     if (keys.join(',') !== 'mode,type') return { ok: false, reason: 'setPreviewMode fields mismatch' };

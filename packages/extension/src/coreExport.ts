@@ -18,6 +18,7 @@ import {
   ExportCoreError, ExportUnavailableError,
   type ConvertOutcome, type ProfileDiagnostic, type ProfileValidation,
 } from './export.ts';
+import type { ExportPngDeps, PlainPngRenderOutcome } from './exportPng.ts';
 
 const PYTHON_HINT = 'Export needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed. Nothing was written.';
 
@@ -140,6 +141,16 @@ export function warningsFromReport(report: Record<string, unknown> | undefined):
 
 let sequence = 0;
 
+// Runs `fn` in a fresh private temp directory and always removes it.
+export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
+  const dir = await mkdtemp(join(tmpdir(), 'vpe-export-'));
+  try {
+    return await fn(dir);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 export type CoreExportDeps = {
   validateProfile: (source: string, width: number, height: number) => Promise<ProfileValidation>;
   build: (request: { source: string; output: string; width: number; height: number; expectedSha256?: string }) => Promise<BuildOutcome>;
@@ -155,14 +166,6 @@ export function createCoreExportDeps(pythonPath: string | undefined): CoreExport
     const python = pythonPath?.trim();
     if (!python) throw new ExportUnavailableError(PYTHON_HINT);
     return python;
-  };
-  const withTempDir = async <T>(fn: (dir: string) => Promise<T>): Promise<T> => {
-    const dir = await mkdtemp(join(tmpdir(), 'vpe-export-'));
-    try {
-      return await fn(dir);
-    } finally {
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-    }
   };
   return {
     async validateProfile(source, width, height): Promise<ProfileValidation> {
@@ -233,6 +236,40 @@ export function createCoreExportDeps(pythonPath: string | undefined): CoreExport
     },
     async removeFile(path: string): Promise<void> {
       await rm(path, { force: true });
+    },
+  };
+}
+
+// Production rendering dependencies for the plain-PNG export
+// (Issue #45): the same Core validate/build/convert operations as
+// the vector-png export, but rendering into a private temp file and
+// resolving its bytes - the stripped raster is the only thing the
+// caller ever writes, and only where the user chose. The dialog and
+// the final write are the host's (see ExportPngDeps).
+export type CorePlainPngDeps = Pick<ExportPngDeps, 'validateProfile' | 'renderViaBuild' | 'renderViaConvert'>;
+
+export function createCorePlainPngDeps(pythonPath: string | undefined): CorePlainPngDeps {
+  const base = createCoreExportDeps(pythonPath);
+  const readRendered = async (outcome: { ok: true } | { ok: false; code: string; message: string }, output: string, warnings: string[]): Promise<PlainPngRenderOutcome> => {
+    if (!outcome.ok) return outcome;
+    return { ok: true, png: await readFile(output), warnings };
+  };
+  return {
+    validateProfile: base.validateProfile,
+    async renderViaBuild(source, width, height): Promise<PlainPngRenderOutcome> {
+      return withTempDir(async (dir) => {
+        const output = join(dir, 'render.png');
+        const outcome = await base.build({ source, output, width, height });
+        return readRendered(outcome, output, []);
+      });
+    },
+    async renderViaConvert(source): Promise<PlainPngRenderOutcome> {
+      return withTempDir(async (dir) => {
+        const output = join(dir, 'render.png');
+        const outcome = await base.convert({ source, output });
+        if (!outcome.ok) return outcome;
+        return readRendered({ ok: true }, output, outcome.warnings);
+      });
     },
   };
 }
