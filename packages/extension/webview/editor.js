@@ -70,13 +70,39 @@ if (persistedPanel.previewMode === 'edited') previewState.showEdited();
 previewState.setBackgroundPreset(typeof persistedPanel.backgroundPreset === 'string' ? persistedPanel.backgroundPreset : 'checkerboard');
 if (typeof persistedPanel.customColor === 'string') previewState.setBackgroundCustom(persistedPanel.customColor);
 if (previewState.mode !== 'saved') vscode.postMessage({ type: 'setPreviewMode', mode: previewState.mode });
+// Word wrap for the code pane (Issue #45 follow-up): off by default,
+// toggled by Alt+Z or the toolbar Wrap button, persisted per panel
+// like the other panel choices. The editor picks the value up at
+// creation and on every toggle.
+let wordWrapOn = persistedPanel.wordWrap === true;
 function persistPanelState() {
   vscode.setState({
     previewMode: previewState.mode,
     backgroundPreset: previewState.backgroundPreset,
     customColor: previewState.customColor,
+    wordWrap: wordWrapOn,
   });
 }
+function refreshWordWrap() {
+  document.getElementById('tool-wrap').setAttribute('aria-pressed', String(wordWrapOn));
+  if (editor) editor.updateOptions({ wordWrap: wordWrapOn ? 'on' : 'off' });
+}
+function toggleWordWrap() {
+  wordWrapOn = !wordWrapOn;
+  refreshWordWrap();
+  persistPanelState();
+}
+document.getElementById('tool-wrap').addEventListener('click', toggleWordWrap);
+// Capture phase, so the toggle fires exactly once even when Monaco
+// has focus (and regardless of any binding Monaco itself may have);
+// holding the keys down does not strobe the setting.
+document.addEventListener('keydown', (event) => {
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.code !== 'KeyZ') return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!event.repeat) toggleWordWrap();
+}, true);
+refreshWordWrap();
 
 function refreshBackground() {
   const area = document.getElementById('preview-area');
@@ -211,6 +237,7 @@ require(['vs/editor/editor.main'], (monaco) => {
   editor = monaco.editor.create(document.getElementById('editor'), {
     value: '',
     language: 'xml',
+    wordWrap: wordWrapOn ? 'on' : 'off',
     automaticLayout: true,
     minimap: { enabled: false },
     // Editing is enabled so completion and diagnostics can be exercised;

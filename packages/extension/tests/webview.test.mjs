@@ -55,9 +55,22 @@ test('Monaco follows the VS Code colour theme (Issue #45, design B)', async () =
   assert.match(js, /MutationObserver\(syncMonacoTheme\)/);
 });
 
+test('word wrap toggles with Alt+Z and the Wrap button, persisted per panel (Issue #45)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /event\.code !== 'KeyZ'/);
+  assert.match(js, /addEventListener\('keydown', \(event\) => \{[\s\S]*?\}, true\)/, 'capture-phase Alt+Z listener');
+  assert.match(js, /getElementById\('tool-wrap'\)\.addEventListener\('click', toggleWordWrap\)/);
+  assert.match(js, /wordWrap: wordWrapOn \? 'on' : 'off'/, 'editor creation takes the persisted choice');
+  assert.match(js, /editor\.updateOptions\(\{ wordWrap: wordWrapOn \? 'on' : 'off' \}\)/);
+  assert.match(js, /wordWrap: wordWrapOn,/, 'the choice is part of the persisted panel state');
+  assert.match(js, /persistedPanel\.wordWrap === true/);
+  const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
+  assert.match(css, /#tool-wrap\[aria-pressed="true"\]/);
+});
+
 test('editor HTML (Issue #45) has the code toolbar and the Preview panel structure', () => {
   const html = buildEditorHtml(assets);
-  for (const id of ['code-pane', 'code-toolbar', 'tool-save', 'tool-format', 'editor',
+  for (const id of ['code-pane', 'code-toolbar', 'tool-save', 'tool-format', 'tool-wrap', 'editor',
     'preview-pane', 'preview-header', 'preview-title', 'bg-presets',
     'bg-checkerboard', 'bg-white', 'bg-black',
     'fill-row', 'fill-swatch', 'fill-text', 'fill-apply',
@@ -67,6 +80,7 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   assert.match(html, /id="tool-save" type="button">Save</);
   assert.match(html, /id="tool-format" type="button">Format</);
+  assert.match(html, /id="tool-wrap" type="button" aria-pressed="false"[^>]*>Wrap</);
   assert.match(html, /id="preview-title">Preview</);
   assert.match(html, />FILL</);
   assert.match(html, />BACKGROUND</);
