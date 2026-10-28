@@ -90,6 +90,15 @@ window.addEventListener('message', (event) => {
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+  } else if (message.type === 'saved') {
+    savedUri = message.previewUri;
+    refreshPreview();
+  } else if (message.type === 'sourceSync') {
+    if (editor && editor.getValue() !== message.source) {
+      applyingHostUpdate = true;
+      editor.setValue(message.source);
+      applyingHostUpdate = false;
+    }
   } else if (message.type === 'previewRendered') {
     previewState.editedRendered(message.uri, message.revision);
     refreshPreview();

@@ -4,6 +4,22 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
+## P2-04: source-preserving save and Save As
+
+The editor is now a full `CustomEditorProvider`. Saving never writes
+bytes directly: the host sends the edited source through the Core
+`build` path with the file's current SHA-256 as the revision token.
+The Core validates the profile, renders, verifies the candidate and
+publishes atomically, retaining a backup snapshot; a profile violation
+blocks the save, a changed destination is a conflict, and any failure
+leaves the original file and the dirty buffer untouched. Source bytes
+are preserved exactly (BOM, CRLF, formatting) because the source is
+never reserialized. Save As creates a new file, or overwrites an
+existing one only under that file's own token. Revert reloads from
+disk; backups copy the file plus a small sidecar with the pending
+source for hot-exit restore. Undo/redo events are emitted per edit;
+their authoritative history synchronization is P2-05.
+
 ## P2-03: debounced previews and manual toggle
 
 Edited previews render only through the Python Core: after 300 ms idle
@@ -49,11 +65,7 @@ and bounded in `src/messages.ts`.
   with no VS Code dependency, following the bridge package's convention of
   running TypeScript directly under Node's test runner.
 
-The provider remains read-only at the VS Code level: the webview shows
-the saved PNG raster next to the Monaco source model, edits update
-advisory diagnostics in memory, and nothing is written back yet.
-Previews (P2-03) and the editable save lifecycle (P2-04) replace the
-read-only provider without changing the view type or commands.
+The view type and commands have not changed since P2-01.
 Compilation/bundling for VSIX distribution is P3-04 scope; `npm run check`
 type-checks the sources.
 
