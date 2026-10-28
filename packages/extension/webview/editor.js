@@ -90,6 +90,8 @@ window.addEventListener('message', (event) => {
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+  } else if (message.type === 'notice') {
+    document.getElementById('meta').textContent = message.text;
   } else if (message.type === 'saved') {
     savedUri = message.previewUri;
     refreshPreview();
