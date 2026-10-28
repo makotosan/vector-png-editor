@@ -94,3 +94,38 @@ dropping, hostile-source rejection by the real Core validator, the
 no-auto-toggle invariant and saved-raster fidelity; the TypeScript type
 check passed. Extension-host and packaged-VSIX tests remain P3
 acceptance work, so P2-03 stays open until that evidence exists.
+
+## Source-preserving save and Save As — P2-04
+
+The provider is now a full `CustomEditorProvider`. Saving never writes
+bytes directly: `src/save.ts` orchestrates the flow and
+`src/coreSave.ts` runs it through the bridge to the Core `build`
+command with the destination's current SHA-256 as the revision token.
+The Core validates the profile, renders at the IHDR viewport, verifies
+the candidate and publishes atomically, retaining a backup snapshot of
+the overwritten original. A profile violation blocks the save, a
+destination changed since the token was read is a conflict, and any
+failure leaves the original file untouched while the provider throws,
+so VS Code keeps the dirty buffer. Source bytes are preserved exactly -
+BOM, CRLF and formatting survive because the source is never
+reserialized. Save As creates a new file, or overwrites an existing
+destination only under that file's own token. Cancellation is honored
+before the Core starts; after launch the Core's staged publication is
+atomic, so a save never leaves a partial file.
+
+Revert reloads the source from disk. Backups copy the current file
+plus a small sidecar holding the pending source, so hot-exit restore
+reopens with the unsaved edits intact. Edit events are emitted per
+change with basic undo/redo closures; authoritative undo/redo history
+synchronization is P2-05, and external-change watching is P2-06 (the
+save-time token check already prevents silent overwrite).
+
+Local verification: 56 extension unit tests passed with a real Core
+(50 passed and 6 Core-integration tests skipped without one). The
+integration tests exercise actual filesystem saves: a BOM/CRLF source
+round-trips byte-exactly with its backup snapshot retained, an invalid
+source is blocked with the original file's hash unchanged, a stale
+token produces a conflict and preserves the external version, and Save
+As writes a new file without touching the original. The TypeScript
+type check passed. Extension-host and packaged-VSIX tests remain P3
+acceptance work, so P2-04 stays open until that evidence exists.
