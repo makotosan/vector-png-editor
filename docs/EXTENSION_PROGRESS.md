@@ -260,3 +260,49 @@ profile-data tests (canonical metadata parity with the mirrored
 profile, content-model child sets, rejection of foreign profiles),
 and the TypeScript check passes. Live VS Code host confirmation
 remains part of the P3 acceptance work (Issue #18).
+
+## Plain PNG view mode — Issue #46
+
+Opening an ordinary PNG (a valid PNG with no embedded SVG source)
+through the custom editor - for example via "Open With…" - previously
+failed: `openCustomDocument` rejected it with "no embedded SVG
+source", so the user got an error instead of the picture. The custom
+editor now opens such files in a view mode.
+
+A new pure module, `src/openMode.ts`, decides how the custom editor
+opens a detected file: `vector-png` opens the full editor as before,
+`ordinary-png` opens view mode, and `corrupt-vector-png` / `not-png`
+are rejected with exactly the diagnostics they produced before. Only
+the ordinary-PNG case changed.
+
+A view-mode document carries no source: nothing is extracted and no
+SVG source is fabricated. Its `pendingSource` stays undefined, so the
+save path has nothing to write and the document can never become
+dirty; opening and closing leaves the file on disk byte-identical.
+No file watcher, edit history, external-change tracker or Python Core
+is set up for it, and revert is a no-op. The panel is a static page
+(`buildViewHtml` in `src/webviewHtml.ts`) under the same restrictive
+CSP, with scripts disabled entirely: the meta line reads
+"`<width> x <height> PNG — no embedded SVG source (view only)`", and
+the raster image itself is shown centred on a checkerboard
+(`#view-pane` in `webview/editor.css`). There is no Monaco pane, no
+error notification and no diagnostic.
+
+Unchanged boundaries: the "Vector PNG: Open in Editor" command still
+routes ordinary PNGs to the default image viewer, the custom editor
+keeps priority `option` (ordinary PNGs are never hijacked), and
+corrupt vector-png / non-PNG files still produce their diagnostics.
+The issue's open question - a "Create SVG source…" action converting
+a plain PNG to vector-png - was explicitly not implemented; it
+remains undecided in Issue #46.
+
+Local verification: the extension suite passes (88 passed, 8 skipped
+- the pre-existing Core-integration skips - 0 failed), including a
+new `open-mode` suite covering all four detection kinds through the
+custom-editor open decision plus an on-disk byte-identity check, and
+new webview tests pinning the view-only page (notice, image, no
+scripts, no Monaco, no fabricated SVG) and its checkerboard CSS. The
+TypeScript check passes. The manual VS Code check from the issue's
+test method (ordinary PNG, vector-png, corrupt vector-png and a
+renamed non-PNG, with before/after hashes) remains part of the P3
+real-machine acceptance work (Issue #18).

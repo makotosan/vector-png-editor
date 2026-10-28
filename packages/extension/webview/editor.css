@@ -8,3 +8,8 @@ body { display: flex; flex-direction: column; font-family: sans-serif; }
 #preview-toggle { margin-bottom: 6px; }
 #preview-toggle button[aria-pressed="true"] { font-weight: bold; }
 #preview-status { min-height: 1em; margin-bottom: 6px; }
+/* View-only mode for ordinary PNGs (Issue #46): the raster centred on a
+   checkerboard, no editor pane. */
+#view-pane { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 8px;
+  background-color: #ffffff; background-image: repeating-conic-gradient(#d4d4d4 0% 25%, #ffffff 0% 50%); background-size: 16px 16px; }
+#view-pane img { max-width: 100%; max-height: 100%; }

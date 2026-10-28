@@ -55,3 +55,28 @@ export function buildEditorHtml(assets: WebviewAssets): string {
 </body>
 </html>`;
 }
+
+// View-only shell for ordinary PNGs (Issue #46): no Monaco, no scripts at
+// all - just the meta line and the raster image itself, centred on a
+// checkerboard. `meta` is built by the host from the parsed PNG dimensions
+// and fixed wording only; `imageUri` is the webview URI of the opened file.
+// Nothing user-authored is interpolated into this shell.
+export type ViewAssets = WebviewAssets & { imageUri: string; meta: string };
+
+export function buildViewHtml(assets: ViewAssets): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="${cspFor(assets)}">
+<title>Vector PNG Editor</title>
+<link rel="stylesheet" href="${assets.styleUri}">
+</head>
+<body>
+<div id="meta">${assets.meta}</div>
+<div id="view-pane">
+  <img id="preview" src="${assets.imageUri}" alt="PNG image">
+</div>
+</body>
+</html>`;
+}

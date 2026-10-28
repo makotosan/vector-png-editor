@@ -3,6 +3,7 @@ import { randomBytes, createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { detectPng } from './detect.ts';
 import { routeFor } from './routing.ts';
+import { openModeFor } from './openMode.ts';
 import { buildNewDocumentPng } from './newDocument.ts';
 import { extractSource, type ExtractedSource } from './extract.ts';
 import { validateWebviewMessage } from './messages.ts';
@@ -10,7 +11,7 @@ import { diagnoseSource, lineCol } from './diagnostics.ts';
 import { SAFE_SVG_ATTRIBUTES, SAFE_SVG_ELEMENTS } from './profile.ts';
 import { parseSchemaProfile, type SchemaProfile } from './profileData.ts';
 import { readFileSync } from 'node:fs';
-import { buildEditorHtml } from './webviewHtml.ts';
+import { buildEditorHtml, buildViewHtml } from './webviewHtml.ts';
 import { PreviewController } from './preview.ts';
 import { createCorePreviewRenderer } from './corePreview.ts';
 import { saveInPlace, saveAs } from './save.ts';
@@ -49,6 +50,10 @@ class VectorPngDocument implements vscode.CustomDocument {
     public readonly uri: vscode.Uri,
     public readonly width: number,
     public readonly height: number,
+    // View-only documents (ordinary PNGs, Issue #46) carry no source:
+    // pendingSource stays undefined, so the save path has nothing to
+    // write and the document can never become dirty.
+    public readonly viewOnly: boolean = false,
   ) {}
   // Pushes a source to every open webview except the one identified by
   // `origin`, without creating a new edit event. Used for undo/redo,
@@ -136,10 +141,17 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
 
   async openCustomDocument(uri: vscode.Uri): Promise<VectorPngDocument> {
     const bytes = await vscode.workspace.fs.readFile(uri);
-    const detection = detectPng(bytes);
-    if (detection.kind !== 'vector-png')
-      throw new Error(`Not a valid vector-png file: ${detection.kind === 'corrupt-vector-png' || detection.kind === 'not-png' ? detection.diagnostic : 'no embedded SVG source'}`);
-    const document = new VectorPngDocument(uri, detection.width, detection.height);
+    const openMode = openModeFor(detectPng(bytes));
+    if (openMode.mode === 'reject')
+      throw new Error(`Not a valid vector-png file: ${openMode.diagnostic}`);
+    const document = new VectorPngDocument(uri, openMode.width, openMode.height, openMode.mode === 'view');
+    if (document.viewOnly) {
+      // Issue #46: an ordinary PNG opens in view mode. No source is
+      // extracted or fabricated, no watcher/history/tracker is set up,
+      // and nothing is ever written back - opening and closing leaves
+      // the file byte-identical.
+      return document;
+    }
     document.extracted = extractSource(bytes);
     document.pendingSource = document.extracted.text;
     document.savedSource = document.extracted.text;
@@ -248,7 +260,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const savedUri = () => panel.webview.asWebviewUri(document.uri)
       .with({ query: `saved=${document.saveSequence}` }).toString();
     const nonce = randomBytes(16).toString('base64');
-    panel.webview.html = buildEditorHtml({
+    const assets = {
       cspSource: panel.webview.cspSource,
       nonce,
       monacoVsUri: asUri(vscode.Uri.joinPath(mediaRoot, 'monaco', 'vs')),
@@ -256,7 +268,23 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       styleUri: asUri(vscode.Uri.joinPath(webviewRoot, 'editor.css')),
       scriptUri: asUri(vscode.Uri.joinPath(webviewRoot, 'editor.js')),
       stateScriptUri: asUri(vscode.Uri.joinPath(webviewRoot, 'preview-state.js')),
-    });
+    };
+    if (document.viewOnly) {
+      // Issue #46 view mode: a static, script-free page showing the
+      // raster itself. No Monaco, no preview controller, no Core, no
+      // message handling - and no diagnostics or notifications.
+      panel.webview.options = {
+        enableScripts: false,
+        localResourceRoots: [mediaRoot, webviewRoot, vscode.Uri.joinPath(document.uri, '..')],
+      };
+      panel.webview.html = buildViewHtml({
+        ...assets,
+        imageUri: asUri(document.uri),
+        meta: `${document.width} x ${document.height} PNG — no embedded SVG source (view only)`,
+      });
+      return;
+    }
+    panel.webview.html = buildEditorHtml(assets);
 
     const documentKey = createHash('sha256').update(document.uri.toString()).digest('hex').slice(0, 16);
     const preview = new PreviewController(
@@ -414,6 +442,9 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   }
 
   async revertCustomDocument(document: VectorPngDocument): Promise<void> {
+    // View-only documents hold no source and can never be dirty; a
+    // revert is a no-op rather than an extraction failure (Issue #46).
+    if (document.viewOnly) return;
     const bytes = await vscode.workspace.fs.readFile(document.uri);
     const extracted = extractSource(bytes);
     document.extracted = extracted;
