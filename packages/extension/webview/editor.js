@@ -39,12 +39,23 @@ let savedUri = '';
 function refreshPreview() {
   const img = document.getElementById('preview');
   const uri = previewState.visibleUri(savedUri);
-  if (uri && img.getAttribute('src') !== uri) img.src = uri;
+  if (uri) {
+    img.style.display = '';
+    if (img.getAttribute('src') !== uri) img.src = uri;
+  } else {
+    // Nothing to show for this mode yet (or the render failed):
+    // hide the image so the pane shows the status explanation
+    // below instead of a broken-image icon.
+    img.removeAttribute('src');
+    img.style.display = 'none';
+  }
   document.getElementById('show-saved').setAttribute('aria-pressed', String(previewState.mode === 'saved'));
   document.getElementById('show-edited').setAttribute('aria-pressed', String(previewState.mode === 'edited'));
   const status = document.getElementById('preview-status');
   status.textContent = previewState.mode === 'edited'
-    ? (previewState.editedError ?? (previewState.editedUri ? '' : 'No edited preview yet.'))
+    ? (previewState.editedError ?? (previewState.editedUri
+      ? (previewState.editedRevision < revision ? 'Rendering the edited preview…' : '')
+      : 'No edited preview yet.'))
     : '';
 }
 document.getElementById('show-saved').addEventListener('click', () => {
