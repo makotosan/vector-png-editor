@@ -74,8 +74,9 @@ test('word wrap toggles via the host command message and the Wrap button, persis
 test('preview pane hides the image instead of a broken icon while the edited render is missing (Issue #45)', async () => {
   const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
   assert.match(js, /img\.removeAttribute\('src'\);\n    img\.style\.display = 'none';/);
-  assert.match(js, /previewState\.editedRevision < revision \? 'Rendering the editing preview…' : ''/);
-  assert.match(js, /'No editing preview yet\.'/);
+  assert.match(js, /previewState\.editedUri && previewState\.editedRevision >= revision\n      \? ''\n      : 'Rendering the editing preview…'/,
+    'a missing or stale render reads as generating, never as absent');
+  assert.doesNotMatch(js, /No editing preview yet/, 'the not-generated-yet state is a generating message (user request, 2026-10-29)');
 });
 
 test('Toggle Word Wrap is a workbench command with an Alt+Z keybinding (Issue #45)', async () => {

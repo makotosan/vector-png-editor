@@ -618,3 +618,11 @@ control names its format. Behaviour and messages are unchanged
 (Copy SVG still posts `copySource` from the toolbar). The
 extension README's button table reflects the new labels and
 placement.
+
+Follow-up (2026-10-29, user request): while the first Editing
+render is still being generated, the preview status no longer
+reads "No editing preview yet." - a missing or stale render now
+always reads "Rendering the editing preview…", and the status
+clears only when the current revision's render is on screen.
+The "not there yet" wording survives nowhere: every state
+without an image and without an error has a render in flight.
