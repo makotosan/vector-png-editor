@@ -1,0 +1,4 @@
+# Vendored spec fixtures are compared byte-for-byte with generated output
+# (golden files). Pin LF line endings so a Windows checkout (autocrlf)
+# cannot drift the bytes and fail the golden comparisons.
+packages/core/tests/fixtures/** text eol=lf
