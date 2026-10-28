@@ -1,15 +1,119 @@
+/* Design B: VS Code dark-theme fusion (Issue #45).
+   Every colour comes from a VS Code theme variable so the page
+   follows the user's active colour theme; the fallback values
+   reproduce the default dark theme (#1e1e1e editor family, #252526
+   panel, #3c3c3c borders, #0e639c accent). To retune the look, edit
+   this block - the rest of the sheet consumes only these variables. */
+:root {
+  --vpe-bg: var(--vscode-editor-background, #1e1e1e);
+  --vpe-panel-bg: var(--vscode-sideBar-background, #252526);
+  --vpe-border: var(--vscode-panel-border, #3c3c3c);
+  --vpe-fg: var(--vscode-foreground, #cccccc);
+  --vpe-fg-dim: var(--vscode-descriptionForeground, #9d9d9d);
+  --vpe-accent: var(--vscode-button-background, #0e639c);
+  --vpe-accent-fg: var(--vscode-button-foreground, #ffffff);
+  --vpe-accent-hover: var(--vscode-button-hoverBackground, #1177bb);
+  --vpe-btn-bg: var(--vscode-button-secondaryBackground, #3a3d41);
+  --vpe-btn-fg: var(--vscode-button-secondaryForeground, #ffffff);
+  --vpe-btn-hover: var(--vscode-button-secondaryHoverBackground, #45494e);
+  --vpe-input-bg: var(--vscode-input-background, #3c3c3c);
+  --vpe-input-border: var(--vscode-input-border, #3c3c3c);
+  --vpe-input-fg: var(--vscode-input-foreground, #cccccc);
+  --vpe-focus: var(--vscode-focusBorder, #007fd4);
+  --vpe-link: var(--vscode-textLink-foreground, #3794ff);
+  --vpe-error: var(--vscode-inputValidation-errorBorder, #be1100);
+  --vpe-radius: 2px;
+  /* Translucent greys: the checkerboard reads as dark greys on a
+     dark panel and as light greys on a light one. */
+  --vpe-checker: repeating-conic-gradient(rgba(128, 128, 128, 0.32) 0% 25%, rgba(128, 128, 128, 0.13) 0% 50%);
+}
+
 html, body { margin: 0; height: 100%; }
-body { display: flex; flex-direction: column; font-family: sans-serif; }
-#meta { padding: 4px 8px; }
+body {
+  display: flex; flex-direction: column;
+  background: var(--vpe-bg); color: var(--vpe-fg);
+  font-family: var(--vscode-font-family, sans-serif); font-size: 13px;
+}
+button {
+  font: inherit; font-size: 13px; color: var(--vpe-btn-fg); background: var(--vpe-btn-bg);
+  border: 1px solid transparent; border-radius: var(--vpe-radius);
+  padding: 4px 12px; cursor: pointer; white-space: nowrap;
+}
+button:hover { background: var(--vpe-btn-hover); }
+button:disabled, input:disabled { opacity: 0.5; cursor: default; }
+button:focus-visible, input:focus-visible { outline: 1px solid var(--vpe-focus); outline-offset: -1px; }
+button.primary { background: var(--vpe-accent); color: var(--vpe-accent-fg); }
+button.primary:hover { background: var(--vpe-accent-hover); }
+input[type="text"] {
+  font: inherit; font-size: 13px; color: var(--vpe-input-fg); background: var(--vpe-input-bg);
+  border: 1px solid var(--vpe-input-border); border-radius: var(--vpe-radius); padding: 3px 6px;
+}
+input[type="color"] {
+  background: var(--vpe-input-bg); border: 1px solid var(--vpe-input-border);
+  border-radius: var(--vpe-radius); height: 24px; padding: 1px; cursor: pointer;
+}
+input[aria-invalid="true"] { outline: 1px solid var(--vpe-error); outline-offset: -1px; }
+
+#meta { padding: 4px 8px; color: var(--vpe-fg-dim); font-size: 12px; }
 #panes { display: flex; flex: 1; min-height: 0; }
-#preview-pane { flex: 0 0 40%; overflow: auto; padding: 8px; }
+
+/* Code pane (left): compact toolbar over Monaco. Save is the primary
+   action, as in the B mock. */
+#code-pane { display: flex; flex-direction: column; flex: 1; min-width: 0; background: var(--vpe-bg); }
+#code-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--vpe-border); }
+#code-toolbar #meta { margin-left: auto; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#tool-save { background: var(--vpe-accent); color: var(--vpe-accent-fg); }
+#tool-save:hover { background: var(--vpe-accent-hover); }
+#editor { flex: 1; min-height: 0; }
+
+/* Preview panel (right). */
+#preview-pane {
+  flex: 0 0 40%; overflow: auto; padding: 8px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--vpe-panel-bg); border-left: 1px solid var(--vpe-border);
+}
 #preview-pane img { max-width: 100%; }
-#editor { flex: 1; min-width: 0; }
-#preview-toggle { margin-bottom: 6px; }
-#preview-toggle button[aria-pressed="true"] { font-weight: bold; }
-#preview-status { min-height: 1em; margin-bottom: 6px; }
+#preview-header { display: flex; align-items: center; justify-content: space-between; }
+#preview-title { font-weight: 600; }
+#bg-presets { display: flex; gap: 4px; }
+#bg-presets button {
+  width: 22px; height: 22px; padding: 0; font-size: 12px; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--vpe-input-bg); border: 1px solid var(--vpe-input-border);
+}
+#bg-presets button[aria-pressed="true"] { outline: 1px solid var(--vpe-focus); outline-offset: 0; }
+#bg-checkerboard { background-image: var(--vpe-checker); background-size: 8px 8px; color: transparent; }
+#bg-white { color: #ffffff; }
+#bg-black { color: #000000; }
+#fill-row, #background-row { display: flex; align-items: center; gap: 6px; }
+#fill-row label, #background-row label {
+  flex: 0 0 76px; font-size: 11px; letter-spacing: 0.04em; color: var(--vpe-fg-dim);
+}
+#fill-row input[type="text"], #background-row input[type="text"] { flex: 1; min-width: 0; }
+#fill-row input[type="color"], #background-row input[type="color"] { flex: 0 0 32px; width: 32px; }
+#fill-apply { background: transparent; color: var(--vpe-link); padding: 4px 6px; }
+#fill-apply:hover { background: transparent; text-decoration: underline; }
+#preview-mode-row { display: flex; align-items: center; gap: 8px; }
+#preview-toggle { display: flex; }
+#preview-toggle button { border-radius: 0; }
+#preview-toggle button:first-child { border-radius: var(--vpe-radius) 0 0 var(--vpe-radius); }
+#preview-toggle button:last-child { border-radius: 0 var(--vpe-radius) var(--vpe-radius) 0; }
+#preview-toggle button[aria-pressed="true"] { background: var(--vpe-accent); color: var(--vpe-accent-fg); }
+#preview-status { min-height: 1em; color: var(--vpe-fg-dim); font-size: 12px; }
+#preview-area {
+  flex: 1; min-height: 120px; overflow: auto;
+  display: flex; align-items: center; justify-content: center; padding: 12px;
+  border: 1px solid var(--vpe-border); border-radius: var(--vpe-radius);
+}
+#preview-area.checkerboard { background-image: var(--vpe-checker); background-size: 16px 16px; }
+#preview-area img { max-width: 100%; max-height: 100%; }
+#preview-actions { display: flex; gap: 6px; margin-top: auto; }
+#preview-actions button { flex: 1; }
+#action-export-png { background: var(--vpe-accent); color: var(--vpe-accent-fg); }
+#action-export-png:hover { background: var(--vpe-accent-hover); }
+
 /* View-only mode for ordinary PNGs (Issue #46): the raster centred on a
    checkerboard, no editor pane. */
 #view-pane { flex: 1; min-height: 0; overflow: auto; display: flex; align-items: center; justify-content: center; padding: 8px;
-  background-color: #ffffff; background-image: repeating-conic-gradient(#d4d4d4 0% 25%, #ffffff 0% 50%); background-size: 16px 16px; }
+  background-image: repeating-conic-gradient(rgba(128, 128, 128, 0.32) 0% 25%, rgba(128, 128, 128, 0.13) 0% 50%); background-size: 16px 16px; }
 #view-pane img { max-width: 100%; max-height: 100%; }

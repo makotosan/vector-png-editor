@@ -421,3 +421,124 @@ already-normalized no-op; the integration tests normalize a styled
 source end to end (its output is a fixed point) and surface an
 unsupported-css failure with its structured errors. Live host
 confirmation joins the Issue #18 acceptance list.
+
+## Office Viewer-style split UI — Issue #45
+
+The editor page for editable documents (both vector-png and `.svg`
+kinds; the Issue #46 view-only page is unchanged) is now a split
+layout in the style of a document viewer. On the left, a code pane: a
+compact toolbar with **Save** and **Format** buttons and the document
+meta line, over the Monaco editor with its existing diagnostics,
+completion and edit sync. On the right, a **Preview** panel: a header
+with background preset toggles (checkerboard / white / black), the
+**FILL** and **BACKGROUND** rows, the Saved/Edited preview toggle
+with its status text, the preview stage with the rendered image
+centred on the chosen background, and a bottom action row of **Copy**
+| **Export** | **Export PNG**. The toggle labels read "Saved" /
+"Edited" for both document kinds (the state machine semantics are
+unchanged: the pane opens on the saved view and switches only
+manually). The styling follows the user's chosen design B (VS Code
+dark-theme fusion): every colour is a VS Code theme CSS variable
+(`--vscode-editor-background`, `--vscode-sideBar-background`,
+`--vscode-panel-border`, `--vscode-button-background`,
+`--vscode-input-background`, `--vscode-focusBorder`, and their
+companions) collected in a single `:root` block in
+`webview/editor.css`, with the default dark values (#1e1e1e editor
+family, #252526 panel, #3c3c3c borders, #0e639c accent) only as
+`var()` fallbacks, so the page follows the active colour theme.
+Save and Export PNG are the primary accent buttons; everything else
+is a secondary button; the checkerboard is a translucent-grey
+`repeating-conic-gradient` that reads as dark greys on a dark panel
+and light greys on a light one. The Monaco code area follows the
+same theme: the theme class VS Code stamps on the webview body
+(`vscode-dark` / `vscode-high-contrast`) selects Monaco's matching
+built-in theme, kept in step by a class observer, so the whole page
+reads as one surface. No new dependencies, no inline event
+handlers, no SVG markup in the DOM (the preview remains an `<img>`),
+and the CSP is unchanged (`default-src 'none'`, nonce scripts).
+
+The **FILL** row shows the root `<svg>` element's current `fill`
+attribute value (a colour, `url(#plate)`, or empty) in an editable
+text field beside a native colour input. Nothing applies while
+typing or picking: only Enter in the field or the Apply button posts
+the value, and the host then makes exactly one ordinary edit —
+recorded in the history, undoable, dirty-marking, saved only through
+the normal save — that sets or removes the root element's `fill`
+presentation attribute; clearing the field and applying removes the
+attribute. The read/write is a small pure module
+(`src/rootFill.ts`): it scans the prolog and the root start-tag only,
+preserves the rest of the document byte-for-byte (an existing `fill`
+keeps its quote style, so re-applying the shown value is a no-op),
+handles `>` and `/>` root tags, and reports the root as unavailable
+when it cannot be scanned with confidence — the row is then disabled
+with a title explaining why, and nothing is rewritten. The host
+posts the root fill on init, on every cross-panel sync and on every
+recorded edit; in the webview, a refresh that arrives while the
+field is focused or dirty is deferred and lands on blur, so an edit
+in progress is never overwritten mid-keystroke and focus is never
+stolen. The **BACKGROUND** row is preview presentation only: it sets
+the preview stage's background colour and never reaches the source
+or the file. A preset and a custom colour are mutually exclusive —
+choosing a custom colour (swatch or hex field) deselects the
+presets, choosing a preset clears the custom colour, and clearing
+the hex field returns to the checkerboard preset. Invalid colour
+text is rejected in the field (the last valid value is restored and
+the field is marked invalid) without touching anything else; `#rgb`
+and `#rrggbb` are accepted and normalized (`webview/preview-state.js`).
+
+**Save** routes through `workbench.action.files.save`, so the
+custom document save lifecycle (conflict handling, Core write) runs
+exactly as for Ctrl+S. **Format** applies a conservative
+indentation-only formatter (`src/formatSource.ts`) as one ordinary
+edit: it rewrites only the leading indentation of structural lines
+to match the element nesting, never joins or splits lines, and
+leaves `<style>`/`<text>`/`<tspan>` content, comments and CDATA
+byte-for-byte untouched; an already formatted source is a no-op
+reported on the meta line. **Copy** writes the current source text
+to the clipboard on the host and confirms on the meta line.
+**Export** shows a save dialog (default `<base>.svg` for a
+vector-png document, `<base>-copy.svg` for an `.svg` document) and
+writes the current source text as UTF-8; the open document and its
+file are never modified, and choosing the document's own path is
+refused. **Export PNG** saves the rendered raster as a plain PNG
+with no embedded source (`src/exportPng.ts`, Core dependencies in
+`src/coreExport.ts`): the raster always comes from the Python Core —
+through `build` for a source that validates under safe-svg-v1, or
+through the normalization `convert` route for one that does not, in
+which case the result tells the user the PNG was rendered via
+normalization; if the chosen route fails, the other is tried once,
+and only when both fail is the primary route's error reported. The
+built vector-png's single source iTXt chunk is stripped in
+TypeScript (`stripSourceChunk`), copying every other chunk as raw
+bytes, so the written file is the identical raster without the
+source. The dialog default is `<base>.png` for an `.svg` document
+and `<base>.plain.png` for a vector-png document; rendering happens
+before the dialog, any failure writes nothing, and the document's
+own path is refused as a target.
+
+Panel state — the preview mode and the background preset/custom
+colour — persists per panel in the existing webview state mechanism
+(`vscode.setState`); the FILL value is not panel state and always
+mirrors the source. All new webview-to-host messages pass the strict
+validation in `src/messages.ts` in the existing style: `saveDocument`,
+`formatSource`, `copySource`, `exportSource` and `exportPng` are
+exact no-field messages, and `applyRootFill` carries a single value
+string capped at 256 characters with control characters rejected.
+
+Verification: the extension suite passes 164 tests with 0 failures
+and 12 skips by default, and 176 of 176 with a real Core (the
+baseline on main was 120 passing / 12 skipped by default, 132 of 132
+with a real Core), and the TypeScript check passes. New coverage:
+the root-fill module (colour, `url(#id)` and quoted reads; set,
+replace in both quote styles, remove on empty; self-closing roots;
+byte-for-byte preservation of everything else; malformed roots
+unavailable), the formatter (nesting, raw-region preservation,
+idempotence, already-formatted no-op), the message validation for
+every new type in exact and hostile shapes, the panel background
+state machine and hex normalization, the editor HTML structure and
+design-B CSS variables, the Monaco theme sync, and the plain-PNG export with fake
+dependencies (build route strips exactly the source chunk,
+convert route reports the normalization, both-routes-fail and
+strip-failure write nothing, dialog cancel writes nothing). Live
+screenshot comparison in a VS Code host remains Issue #18 work;
+Issue #45 stays open for that check.

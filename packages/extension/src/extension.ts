@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { randomBytes, createHash } from 'node:crypto';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { detectPng } from './detect.ts';
 import { routeFor, routeForFile } from './routing.ts';
 import { openModeFor } from './openMode.ts';
@@ -8,7 +8,10 @@ import { decodeSvgText, isSvgFileName, svgDocumentSize } from './svgSource.ts';
 import { createSvgPreviewRenderer } from './svgPreview.ts';
 import { createNodeSvgSaveDeps, saveSvgTextFile, SvgSaveConflictError } from './svgSave.ts';
 import { exportSvgAsVectorPng, formatProfileDiagnostics, type ProfileDiagnostic } from './export.ts';
-import { createCoreExportDeps } from './coreExport.ts';
+import { createCoreExportDeps, createCorePlainPngDeps } from './coreExport.ts';
+import { isValidFillValue, readRootFill, setRootFill } from './rootFill.ts';
+import { formatSvgSource } from './formatSource.ts';
+import { exportPlainPng } from './exportPng.ts';
 import { applyNormalizedEdit, formatNormalizeErrors, formatNormalizeSummary, normalizeSourceText } from './normalize.ts';
 import { createCoreNormalizeDeps } from './coreNormalize.ts';
 import { buildNewDocumentPng } from './newDocument.ts';
@@ -402,8 +405,15 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       void panel.webview.postMessage({ type: 'diagnostics', diagnostics });
     };
     const panelId = Symbol('panel');
+    // Issue #45: the FILL row mirrors the root element's fill. The
+    // host owns the value; the webview only displays what it is sent.
+    const postRootFill = () => {
+      const fill = readRootFill(document.pendingSource ?? '');
+      void panel.webview.postMessage({ type: 'rootFill', available: fill.available, value: fill.value });
+    };
     const syncSubscription = document.onSourceSync(panelId, (source) => {
       void panel.webview.postMessage({ type: 'sourceSync', source });
+      postRootFill();
       sendDiagnostics(source);
       preview.schedule(source, -1);
     });
@@ -425,6 +435,96 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     // the pane still opens on the saved raster and never auto-switches.
     if (document.pendingSource !== undefined) preview.schedule(document.pendingSource, 0);
 
+    // Issue #45 panel actions. A host-originated source change (root
+    // fill, Format) goes through the same machinery as Normalize
+    // SVG: one history edit under its own coalesce key, made pending
+    // and synced to every panel, with the edit event fired so VS
+    // Code's undo stack tracks it. Returns false when the history
+    // refused the edit (identical snapshot), i.e. nothing changed.
+    const applyHostEdit = (next: string, label: string, coalesceKey: string): boolean => {
+      if (!document.history.recordEdit(next, { now: Date.now(), coalesceKey })) return false;
+      document.pendingSource = next;
+      document.syncSource(next);
+      const applyPointer = (source: string | undefined) => {
+        if (source !== undefined) document.syncSource(source);
+      };
+      const edit: VectorPngEdit = {
+        label,
+        undo: async () => applyPointer(document.history.undo()),
+        redo: async () => applyPointer(document.history.redo()),
+      };
+      this.changeEmitter.fire({ document, ...edit });
+      return true;
+    };
+    const documentStem = () => (document.uri.path.split('/').pop() ?? 'document').replace(/\.(png|svg)$/i, '');
+    // Export writes the CURRENT source as a standalone .svg beside
+    // the document (a "-copy" name for .svg documents). The open
+    // document and its file are never the export target.
+    const exportSourceToFile = async (): Promise<void> => {
+      const source = document.pendingSource ?? document.savedSource ?? '';
+      const defaultName = document.kind === 'svg' ? `${documentStem()}-copy.svg` : `${documentStem()}.svg`;
+      const target = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.joinPath(document.uri, '..', defaultName),
+        filters: { 'SVG images': ['svg'] },
+        saveLabel: 'Export SVG',
+      });
+      if (!target) return;
+      if (target.fsPath === document.uri.fsPath) {
+        document.notifyNotice('Export refused: the open document itself cannot be the export target.');
+        return;
+      }
+      try {
+        await vscode.workspace.fs.writeFile(target, new TextEncoder().encode(source));
+        void vscode.window.showInformationMessage(`Vector PNG: SVG exported: ${target.fsPath}`);
+      } catch (error) {
+        void vscode.window.showErrorMessage(`Vector PNG: SVG export failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    };
+    // Export PNG renders through the Core (exportPng.ts decides the
+    // build/convert route) and writes a plain PNG with no embedded
+    // source. Rendering happens before the dialog, so a failure
+    // never leaves a file behind.
+    const exportPlainPngFromPanel = async (): Promise<void> => {
+      const source = document.pendingSource ?? document.savedSource ?? '';
+      const defaultName = document.kind === 'svg' ? `${documentStem()}.png` : `${documentStem()}.plain.png`;
+      const deps = {
+        ...createCorePlainPngDeps(await this.corePythonPath()),
+        chooseTarget: async (defaultPath: string): Promise<string | null> => {
+          const target = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(defaultPath),
+            filters: { 'PNG images': ['png'] },
+            saveLabel: 'Export PNG',
+          });
+          if (!target) return null;
+          if (target.fsPath === document.uri.fsPath) {
+            document.notifyNotice('Export PNG refused: the open document itself cannot be the export target.');
+            return null;
+          }
+          return target.fsPath;
+        },
+        writeFile: async (path: string, bytes: Uint8Array): Promise<void> => {
+          await vscode.workspace.fs.writeFile(vscode.Uri.file(path), bytes);
+        },
+      };
+      const result = await exportPlainPng(deps, {
+        source,
+        width: document.width,
+        height: document.height,
+        defaultPath: join(dirname(document.uri.fsPath), defaultName),
+      });
+      if (result.status === 'exported') {
+        const via = result.viaNormalization ? ' (rendered via normalization)' : '';
+        void vscode.window.showInformationMessage(`Vector PNG: plain PNG exported${via}: ${result.targetPath}`);
+        if (result.warnings.length > 0) {
+          const shown = result.warnings.slice(0, 10).join('\n');
+          const more = result.warnings.length > 10 ? `\n…and ${result.warnings.length - 10} more` : '';
+          void vscode.window.showWarningMessage(`Normalization warnings:\n${shown}${more}`);
+        }
+      } else if (result.status === 'failed') {
+        void vscode.window.showErrorMessage(`Vector PNG: plain PNG export failed (${result.stage}): ${result.message}`);
+      }
+    };
+
     const schemaProfile = loadSchemaProfile(this.extensionUri);
     const subscription = panel.webview.onDidReceiveMessage((raw: unknown) => {
       const validation = validateWebviewMessage(raw);
@@ -438,6 +538,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
             ? `${document.width} x ${document.height} SVG source`
             : `${document.width} x ${document.height} vector-png`,
           source: document.pendingSource ?? '',
+          rootFill: readRootFill(document.pendingSource ?? ''),
           elements: schemaProfile?.elements ?? SAFE_SVG_ELEMENTS,
           attributes: schemaProfile?.attributes ?? SAFE_SVG_ATTRIBUTES,
           children: schemaProfile?.children ?? {},
@@ -453,6 +554,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         if (!document.history.recordEdit(next, { now: Date.now(), coalesceKey: 'typing' })) return;
         document.pendingSource = next;
         sendDiagnostics(next);
+        postRootFill();
         preview.schedule(next, message.revision);
         document.syncSource(next, panelId); // Keep other panels in step.
         const applyPointer = (source: string | undefined) => {
@@ -468,6 +570,38 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         // Recorded for completeness; the host never changes the mode
         // itself - switching is a manual webview action only (P2-03).
         document.previewMode = message.mode;
+      } else if (message.type === 'saveDocument') {
+        // Route through VS Code so the custom document save lifecycle
+        // (conflict handling, Core write) runs exactly as for Ctrl+S.
+        void vscode.commands.executeCommand('workbench.action.files.save');
+      } else if (message.type === 'formatSource') {
+        const source = document.pendingSource ?? '';
+        const formatted = formatSvgSource(source);
+        if (formatted === source) document.notifyNotice('The source is already formatted.');
+        else applyHostEdit(formatted, 'Format SVG source', 'format');
+      } else if (message.type === 'applyRootFill') {
+        const source = document.pendingSource ?? '';
+        if (!isValidFillValue(message.value)) {
+          postRootFill(); // Resync the field to the actual value.
+          return;
+        }
+        const next = setRootFill(source, message.value);
+        if (next === null) {
+          document.notifyNotice('The root <svg> element could not be located, so its fill was not changed.');
+          postRootFill();
+          return;
+        }
+        // An unchanged result (re-applying the shown value) records
+        // no edit; the field simply resyncs.
+        if (next !== source) applyHostEdit(next, 'Set root fill', 'root-fill');
+        postRootFill();
+      } else if (message.type === 'copySource') {
+        void vscode.env.clipboard.writeText(document.pendingSource ?? '')
+          .then(() => document.notifyNotice('SVG source copied to the clipboard.'));
+      } else if (message.type === 'exportSource') {
+        void exportSourceToFile();
+      } else if (message.type === 'exportPng') {
+        void exportPlainPngFromPanel();
       }
     });
     panel.onDidDispose(() => {

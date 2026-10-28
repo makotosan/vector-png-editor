@@ -30,3 +30,26 @@ test('oversized source is rejected', () => {
 test('oversized serialized message is rejected before parsing fields', () => {
   assert.equal(validateWebviewMessage({ type: 'ready' }, MAX_SVG_BYTES + 5000).ok, false);
 });
+
+test('toolbar and panel action messages carry no fields and reject any', () => {
+  for (const type of ['saveDocument', 'formatSource', 'copySource', 'exportSource', 'exportPng']) {
+    assert.deepEqual(validateWebviewMessage({ type }), { ok: true, message: { type } });
+    assert.equal(validateWebviewMessage({ type, path: '/tmp/x' }).ok, false, `${type} with a field`);
+    assert.equal(validateWebviewMessage({ type, value: 'x' }).ok, false);
+  }
+});
+
+test('applyRootFill accepts an exact shape and rejects everything else', () => {
+  assert.deepEqual(validateWebviewMessage({ type: 'applyRootFill', value: '#ff0000' }),
+    { ok: true, message: { type: 'applyRootFill', value: '#ff0000' } });
+  assert.deepEqual(validateWebviewMessage({ type: 'applyRootFill', value: '' }),
+    { ok: true, message: { type: 'applyRootFill', value: '' } }, 'empty clears the attribute');
+  assert.deepEqual(validateWebviewMessage({ type: 'applyRootFill', value: 'url(#plate)' }),
+    { ok: true, message: { type: 'applyRootFill', value: 'url(#plate)' } });
+  for (const bad of [
+    { type: 'applyRootFill' },
+    { type: 'applyRootFill', value: 42 },
+    { type: 'applyRootFill', value: '#fff', extra: true },
+    { type: 'applyRootFill', value: 'x'.repeat(257) },
+  ]) assert.equal(validateWebviewMessage(bad).ok, false, JSON.stringify(bad).slice(0, 60));
+});
