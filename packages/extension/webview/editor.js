@@ -86,9 +86,9 @@ function refreshPreview() {
   document.getElementById('show-edited').setAttribute('aria-pressed', String(previewState.mode === 'edited'));
   const status = document.getElementById('preview-status');
   status.textContent = previewState.mode === 'edited'
-    ? (previewState.editedError ?? (previewState.editedUri
-      ? (previewState.editedRevision < revision ? 'Rendering the editing preview…' : '')
-      : 'No editing preview yet.'))
+    ? (previewState.editedError ?? (previewState.editedUri && previewState.editedRevision >= revision
+      ? ''
+      : 'Rendering the editing preview…'))
     : '';
 }
 document.getElementById('show-saved').addEventListener('click', () => {
