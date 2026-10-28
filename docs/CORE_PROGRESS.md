@@ -45,3 +45,35 @@ Core 0.1.0.dev3 adds strict bounded protocol-1 stdin requests for all six comman
 ## Managed Python environment follow-up
 
 The TypeScript manager now creates independent venvs, checks trusted wheel/lock digests and the Python range, installs the nine application dependency versions from requirements.lock, validates venv identity/package closure/dependencies/actual rendering, and atomically switches an active/previous pointer. It retains old and failed environments and supports health-gated rollback. runManagedCore selects a ready interpreter with sanitized Python/pip variables. See [INSTALL.md](INSTALL.md) for offline/network selection, API contracts and recovery limits. Local Windows: all 28 Node tests passed in 115.63 seconds without skips, including the real dedicated-venv integration, offline install failure, bad and unhealthy wheels, cancellation, parallel setup, poisoned ambient variables, rollback and exact active-pointer/source preservation. The Core wheel remains 0.1.0.dev3 and Core source is unchanged; the earlier 116 Python tests are historical baseline evidence. Hosted CI for this follow-up is pending and will also execute those Core tests and the real manager test in all nine OS/Python cells. P1-04/P2-07 remain partial: automatic interpreter/native setup UI, release manifests, artifact/native hashes, full renderer resource/cancellation controls, VS Code integration and real-machine acceptance remain open. README, bridge, install, acceptance and progress English/Japanese pairs were compared in full for section meaning, identifiers, versions, limits, exception conditions, references and failure/activation boundaries. PR #25 is merged.
+
+## CI and protected PR integration — P3-03
+
+The required-check register for `main` is three named checks, each
+covering a layer, with no path filters anywhere (every pull request
+runs all three):
+
+| Required check | Workflow | Covers |
+| --- | --- | --- |
+| `core-check` | Core tests | Gate job over the full 3 OS x Python 3.11-3.13 matrix: Core pytest (parser, CLI, writing, notices), wheel/sdist build, bridge + managed-environment tests, wheel-outside-tree check, and - via `packages/core/tests/test_codex_integration.py` - the P3-01 CLI integration suite in every cell |
+| `planning-check` | Planning checks | `tools/check_planning.py`: bilingual doc pairs, pins, links |
+| `extension-check` | Extension tests | Extension type check and unit tests |
+
+Skipped jobs cannot hide required tests: the matrix gate job runs
+with `if: always()` and succeeds only when the matrix result is
+exactly `success` (failure, cancellation or skipping all fail the
+gate), and the other two workflows are single jobs with no condition
+or path filter that could skip them on a pull request.
+
+Enforcement evidence: work reaches `main` only from `codex/*` feature
+branches through pull requests (#27-#36 in this series). On
+2026-10-28, PR #29 carried two failing Planning checks; GitHub
+reported the PR `blocked` and the merge could not be performed until
+a follow-up commit made the checks pass, after which the state became
+`clean` and the merge proceeded - a deliberately observed instance of
+a failing PR being rejected and a green PR becoming eligible. The
+protection *settings* themselves live in the repository settings and
+are not visible to the automation used here; this register names
+exactly which checks must be required so the settings can be audited
+against it at a glance, and the behavioral evidence above shows the
+required checks do gate merges. Real-machine acceptance remains
+P3-02 and is not replaced by any of this.
