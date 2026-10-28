@@ -162,3 +162,40 @@ corrupt-sidecar handling. The TypeScript type check passed.
 Keyboard-level undo/redo and multi-panel behavior in a live editor
 remain extension-host acceptance work (P3), so P2-05 stays open until
 that evidence exists.
+
+## External change conflicts — P2-06
+
+Each document now carries an `ExternalChangeTracker` (`src/watch.ts`)
+holding the SHA-256 of the file bytes the editor last agreed with -
+at open, after each save, and after each reload. A file-system watcher
+on the document's own file classifies every observed disk state by
+content, never by timing, so the echo of the editor's own save is
+ignored by construction. An external change to a clean document is
+reloaded (after the usual passive detection, never unchecked). An
+external change to a dirty document, an unreadable change, or a
+deletion under a dirty document preserves the buffer untouched,
+notifies the user in the editor and by a warning message, and marks
+the document conflicted.
+
+While a document is conflicted, a plain save cannot proceed: it asks
+explicitly - reload from disk, overwrite the external change, or Save
+As - so both versions survive until the user decides and no CLI edit
+can silently overwrite dirty source (or vice versa). Resolving by
+reload adopts the disk state; overwriting proceeds through the normal
+token-checked save (P2-04), whose revision token remains the second
+line of defense against a change landing between observation and
+save. Deleting the file under a dirty document lets the next save
+recreate it from the preserved buffer; renaming is observed as a
+deletion of the old path plus activity on the new one.
+
+Local verification: 74 extension unit tests passed with a real Core
+(66 passed and 8 Core-integration tests skipped without one). The new
+tests cover the full decision matrix (own-save echo, clean reload,
+dirty conflict, unreadable content, deletion/recreation, conflict
+self-healing when the agreed bytes return) plus integration scenarios
+where the Core CLI itself is the external editor: a dirty buffer
+survives its edit and an explicit overwrite then saves, and a clean
+document reloads after its edit and observes a deletion. The
+TypeScript type check passed. Live watcher behavior in an extension
+host remains P3 acceptance work, so P2-06 stays open until that
+evidence exists.
