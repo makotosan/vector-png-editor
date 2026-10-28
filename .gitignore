@@ -13,3 +13,4 @@ packages/extension/out/
 
 # Generated Monaco bundle (copied from the pinned npm package)
 packages/extension/media/monaco/
+packages/extension/media/schemas/
