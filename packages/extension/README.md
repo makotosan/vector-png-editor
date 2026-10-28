@@ -4,6 +4,21 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
+## P2-05: undo/redo synchronization and recovery
+
+`src/history.ts` is the single authoritative history for a document.
+Webview edits are recorded once there (typing bursts coalesce within
+one second); identical re-deliveries of a host sync record nothing, so
+undo/redo cannot feedback-loop. The edit events VS Code receives carry
+undo/redo closures that only move the history pointer and sync the
+snapshot to all panels. Saving never clears the history, so undo
+across a save restores the pre-edit source and dirtiness is always
+`current !== savedSource`. Revert and backup-restore reset the history
+to the restored snapshot. Multiple editor panels per document are
+enabled and kept in step through the same sync path. Backups
+(`src/backup.ts`) copy the file plus a JSON sidecar with the pending
+source, so hot-exit restore reopens with unsaved edits byte-exact.
+
 ## P2-04: source-preserving save and Save As
 
 The editor is now a full `CustomEditorProvider`. Saving never writes
@@ -18,7 +33,7 @@ never reserialized. Save As creates a new file, or overwrites an
 existing one only under that file's own token. Revert reloads from
 disk; backups copy the file plus a small sidecar with the pending
 source for hot-exit restore. Undo/redo events are emitted per edit;
-their authoritative history synchronization is P2-05.
+with history synchronization handled in P2-05.
 
 ## P2-03: debounced previews and manual toggle
 

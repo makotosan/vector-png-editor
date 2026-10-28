@@ -129,3 +129,36 @@ token produces a conflict and preserves the external version, and Save
 As writes a new file without touching the original. The TypeScript
 type check passed. Extension-host and packaged-VSIX tests remain P3
 acceptance work, so P2-04 stays open until that evidence exists.
+
+## Undo/redo synchronization and recovery — P2-05
+
+`src/history.ts` is now the single authoritative history for each
+document. A webview edit is recorded exactly once there; typing bursts
+coalesce within one second into one undoable entry, while discrete
+edits (such as replace-all) stay separate. Identical re-deliveries -
+the echo of a host sync returning from the webview - record nothing
+and fire no edit event, which is what prevents feedback loops between
+Monaco, the host and VS Code's undo stack. The `CustomDocumentEditEvent`
+undo/redo closures only move the history pointer and sync the resulting
+snapshot to the webviews. Saving never clears the history, so undo
+across a save restores the pre-edit source, and redo returns to the
+saved state; dirtiness is always whether the current snapshot differs
+from the saved source. Revert resets the history to the disk state.
+
+Multiple editor panels per document are enabled: a source change in
+one panel is recorded once and synced to the others through the same
+guarded path (full-snapshot sync; the secondary panel's cursor is not
+preserved). Backup persistence moved to `src/backup.ts`: the backup
+copies the file bytes and a JSON sidecar with the pending and saved
+sources, and restore reopens with unsaved edits byte-exact and a fresh
+history rooted at the restored state.
+
+Local verification: 66 extension unit tests passed with a real Core
+(60 passed and 6 Core-integration tests skipped without one). The new
+history tests cover undo/redo walks, echo suppression, redo-tail
+truncation, coalescing, save-undo-redo dirtiness, replace-all steps,
+reset and bounds; the backup tests cover byte-exact round-trips and
+corrupt-sidecar handling. The TypeScript type check passed.
+Keyboard-level undo/redo and multi-panel behavior in a live editor
+remain extension-host acceptance work (P3), so P2-05 stays open until
+that evidence exists.

@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import { randomBytes, createHash } from 'node:crypto';
 import { join } from 'node:path';
-import { copyFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { detectPng } from './detect.ts';
 import { routeFor } from './routing.ts';
 import { buildNewDocumentPng } from './newDocument.ts';
@@ -14,6 +13,8 @@ import { PreviewController } from './preview.ts';
 import { createCorePreviewRenderer } from './corePreview.ts';
 import { saveInPlace, saveAs } from './save.ts';
 import { createCoreSaveDeps } from './coreSave.ts';
+import { SourceHistory } from './history.ts';
+import { writeBackup, readBackup, deleteBackup } from './backup.ts';
 
 export const VIEW_TYPE = 'vectorPng.editor';
 
@@ -23,22 +24,27 @@ class VectorPngDocument implements vscode.CustomDocument {
   savedSource: string | undefined;
   previewMode: 'saved' | 'edited' = 'saved';
   saveSequence = 0;
-  private readonly sourceListeners = new Set<(source: string) => void>();
+  // The authoritative edit history (P2-05). Created with the document.
+  history: SourceHistory = new SourceHistory('');
+  private readonly sourceListeners = new Map<symbol, (source: string) => void>();
   private readonly savedListeners = new Set<() => void>();
   constructor(
     public readonly uri: vscode.Uri,
     public readonly width: number,
     public readonly height: number,
   ) {}
-  // Pushes a host-originated source (undo/redo, revert, backup restore)
-  // to every open webview without creating a new edit event.
-  syncSource(source: string): void {
+  // Pushes a source to every open webview except the one identified by
+  // `origin`, without creating a new edit event. Used for undo/redo,
+  // revert, restore and cross-panel synchronization.
+  syncSource(source: string, origin?: symbol): void {
     this.pendingSource = source;
-    for (const listener of this.sourceListeners) listener(source);
+    for (const [id, listener] of this.sourceListeners) {
+      if (id !== origin) listener(source);
+    }
   }
-  onSourceSync(listener: (source: string) => void): vscode.Disposable {
-    this.sourceListeners.add(listener);
-    return { dispose: () => this.sourceListeners.delete(listener) };
+  onSourceSync(id: symbol, listener: (source: string) => void): vscode.Disposable {
+    this.sourceListeners.set(id, listener);
+    return { dispose: () => this.sourceListeners.delete(id) };
   }
   notifySaved(): void {
     this.saveSequence += 1;
@@ -62,10 +68,11 @@ type VectorPngEdit = {
 
 // Registration and routing are P2-01; the secure Monaco webview is P2-02;
 // debounced Core-rendered previews and the manual toggle are P2-03; the
-// source-preserving save lifecycle through the Core is P2-04. Undo/redo
-// history synchronization is deepened in P2-05 and external-change
-// watching in P2-06; the save path itself already refuses to overwrite
-// a changed destination without its current revision token.
+// source-preserving save lifecycle through the Core is P2-04; the
+// authoritative undo/redo history, backup recovery and multi-panel
+// synchronization are P2-05. External-change watching is P2-06; the
+// save path itself already refuses to overwrite a changed destination
+// without its current revision token.
 class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDocument> {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<VectorPngDocument>>();
   readonly onDidChangeCustomDocument = this.changeEmitter.event;
@@ -88,18 +95,22 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     document.extracted = extractSource(bytes);
     document.pendingSource = document.extracted.text;
     document.savedSource = document.extracted.text;
+    document.history = new SourceHistory(document.extracted.text);
     return document;
   }
 
   async openCustomDocumentBackup(backupId: string): Promise<VectorPngDocument> {
     const backupUri = vscode.Uri.parse(backupId);
-    const sidecar = await readSidecar(backupUri);
+    const sidecar = await readBackup(backupUri.fsPath);
     const document = await this.openCustomDocument(backupUri);
     if (sidecar) {
-      const restored = new VectorPngDocument(sidecar.originalUri, document.width, document.height);
+      // Restore with the unsaved edits intact and byte-exact; the
+      // history restarts from the restored state (P2-05).
+      const restored = new VectorPngDocument(vscode.Uri.parse(sidecar.originalUri), document.width, document.height);
       restored.extracted = document.extracted;
       restored.savedSource = sidecar.savedSource;
       restored.pendingSource = sidecar.source;
+      restored.history = new SourceHistory(sidecar.source);
       return restored;
     }
     return document;
@@ -154,7 +165,8 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       const diagnostics = diagnoseSource(source).map(d => ({ ...d, ...lineCol(source, d.offset) }));
       void panel.webview.postMessage({ type: 'diagnostics', diagnostics });
     };
-    const syncSubscription = document.onSourceSync((source) => {
+    const panelId = Symbol('panel');
+    const syncSubscription = document.onSourceSync(panelId, (source) => {
       void panel.webview.postMessage({ type: 'sourceSync', source });
       sendDiagnostics(source);
       preview.schedule(source, -1);
@@ -181,16 +193,22 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         });
         sendDiagnostics(document.pendingSource ?? '');
       } else if (message.type === 'sourceChanged') {
-        if (message.source === document.pendingSource) return; // Host sync echo: not a new edit.
-        const previous = document.pendingSource ?? '';
         const next = message.source;
+        // The history is the single authority: an echo of a host sync
+        // (or a no-op change) records nothing and fires no edit event,
+        // so undo/redo can never feedback-loop (P2-05).
+        if (!document.history.recordEdit(next, { now: Date.now(), coalesceKey: 'typing' })) return;
         document.pendingSource = next;
         sendDiagnostics(next);
         preview.schedule(next, message.revision);
+        document.syncSource(next, panelId); // Keep other panels in step.
+        const applyPointer = (source: string | undefined) => {
+          if (source !== undefined) document.syncSource(source);
+        };
         const edit: VectorPngEdit = {
           label: 'Edit SVG source',
-          undo: async () => document.syncSource(previous),
-          redo: async () => document.syncSource(next),
+          undo: async () => applyPointer(document.history.undo()),
+          redo: async () => applyPointer(document.history.redo()),
         };
         this.changeEmitter.fire({ document, ...edit });
       } else if (message.type === 'setPreviewMode') {
@@ -244,41 +262,25 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     const extracted = extractSource(bytes);
     document.extracted = extracted;
     document.savedSource = extracted.text;
+    document.history.reset(extracted.text);
     document.syncSource(extracted.text);
     document.notifySaved();
   }
 
   async backupCustomDocument(document: VectorPngDocument, context: vscode.CustomDocumentBackupContext): Promise<vscode.CustomDocumentBackup> {
     const destination = context.destination;
-    await copyFile(document.uri.fsPath, destination.fsPath);
-    const sidecar = {
+    await writeBackup(destination.fsPath, document.uri.fsPath, {
       originalUri: document.uri.toString(),
       source: document.pendingSource ?? '',
       savedSource: document.savedSource ?? '',
-    };
-    await writeFile(destination.fsPath + '.vpe.json', JSON.stringify(sidecar), 'utf8');
+    });
     return {
       id: destination.toString(),
-      delete: async () => {
-        await unlink(destination.fsPath).catch(() => undefined);
-        await unlink(destination.fsPath + '.vpe.json').catch(() => undefined);
-      },
+      delete: async () => deleteBackup(destination.fsPath),
     };
   }
 }
 
-type BackupSidecar = { originalUri: vscode.Uri; source: string; savedSource: string };
-async function readSidecar(backupUri: vscode.Uri): Promise<BackupSidecar | undefined> {
-  try {
-    const parsed = JSON.parse(await readFile(backupUri.fsPath + '.vpe.json', 'utf8')) as
-      { originalUri?: unknown; source?: unknown; savedSource?: unknown };
-    if (typeof parsed.originalUri !== 'string' || typeof parsed.source !== 'string' || typeof parsed.savedSource !== 'string')
-      return undefined;
-    return { originalUri: vscode.Uri.parse(parsed.originalUri), source: parsed.source, savedSource: parsed.savedSource };
-  } catch {
-    return undefined;
-  }
-}
 
 async function openInEditor(target?: vscode.Uri): Promise<void> {
   const uri = target ?? vscode.window.activeTextEditor?.document.uri
@@ -313,7 +315,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri), {
       webviewOptions: { retainContextWhenHidden: true },
-      supportsMultipleEditorsPerDocument: false,
+      supportsMultipleEditorsPerDocument: true,
     }),
     vscode.commands.registerCommand('vectorPng.openInEditor', openInEditor),
     vscode.commands.registerCommand('vectorPng.newDocument', newDocument),
