@@ -5,7 +5,8 @@
 // command into a private preview file whose raster is the Core's own
 // rendering of the edited source. Nothing is rendered before validation
 // succeeds, and the built file is never the user's document.
-import { mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { LatestValidation, runCore, BridgeError } from '../../bridge/src/core.ts';
 import { PreviewInvalidError, PreviewStaleError, PreviewUnavailableError, type PreviewRenderer } from './preview.ts';
@@ -21,6 +22,34 @@ export type CorePreviewOptions = {
 export function createCorePreviewRenderer(options: CorePreviewOptions): PreviewRenderer {
   const lane = new LatestValidation();
   let sequence = 0;
+  // The Core publishes its build output exclusively (an existing
+  // output is refused), and the previews directory persists across
+  // sessions, so the output name must be unique per renderer
+  // instance: a bare sequence restarts at 1 for every reopened
+  // editor and collides with the previous session's leftover file,
+  // which made every edited preview fail with "Output already
+  // exists" (user report, 2026-10-29).
+  const instance = randomUUID().replaceAll('-', '').slice(0, 12);
+  let swept = false;
+  const sweepStalePreviews = async (): Promise<void> => {
+    // Best effort, once per instance: drop this document's preview
+    // files left by earlier instances once they are an hour old, so
+    // the persistent directory does not grow without bound. Fresh
+    // files are kept - another live panel may be about to read the
+    // render it just produced (the host reads it into a data URI;
+    // after that read the file is never needed again).
+    try {
+      const prefix = `preview-${options.documentKey}-`;
+      const cutoff = Date.now() - 60 * 60 * 1000;
+      for (const name of await readdir(options.previewDir)) {
+        if (!name.startsWith(prefix) || !name.endsWith('.png')) continue;
+        const path = join(options.previewDir, name);
+        try {
+          if ((await stat(path)).mtimeMs < cutoff) await unlink(path);
+        } catch { /* a vanished or busy file is fine */ }
+      }
+    } catch { /* the directory may not exist yet */ }
+  };
   return async (source: string, revision: number): Promise<string> => {
     const python = options.pythonPath?.trim();
     if (!python)
@@ -41,7 +70,11 @@ export function createCorePreviewRenderer(options: CorePreviewOptions): PreviewR
     if (!validation.response.ok)
       throw new PreviewInvalidError(validation.response.error?.message ?? 'The Core rejected the source');
     await mkdir(options.previewDir, { recursive: true });
-    const output = join(options.previewDir, `preview-${options.documentKey}-${++sequence}.png`);
+    if (!swept) {
+      swept = true;
+      await sweepStalePreviews();
+    }
+    const output = join(options.previewDir, `preview-${options.documentKey}-${instance}-${++sequence}.png`);
     let built;
     try {
       built = await runCore(python, {

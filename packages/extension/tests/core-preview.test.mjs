@@ -29,6 +29,22 @@ maybe('hostile source is rejected by Core validation and never rendered', async 
     PreviewInvalidError);
 });
 
+maybe('a reopened editor never collides with the previous renderer\'s leftover preview file', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'vpe-preview-'));
+  const source = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>';
+  const first = createCorePreviewRenderer({ pythonPath: python, previewDir: dir, width: 8, height: 8, documentKey: 'testdoc' });
+  const firstOut = await first(source, 1);
+  // Reopening the editor creates a fresh renderer; before the fix
+  // its first build targeted the same filename as the previous
+  // session's leftover and the Core refused: "Output already
+  // exists" (user report, 2026-10-29).
+  const second = createCorePreviewRenderer({ pythonPath: python, previewDir: dir, width: 8, height: 8, documentKey: 'testdoc' });
+  const secondOut = await second(source, 1);
+  assert.notEqual(secondOut, firstOut);
+  const bytes = await readFile(secondOut);
+  assert.deepEqual([...bytes.subarray(0, 8)], [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+});
+
 test('without a configured Python the renderer reports unavailable', async () => {
   const render = createCorePreviewRenderer({ pythonPath: undefined, previewDir: '/tmp', width: 8, height: 8, documentKey: 'x' });
   await assert.rejects(render('<svg/>', 1), PreviewUnavailableError);

@@ -568,7 +568,7 @@ exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
 Verification: the extension suite passes 168 tests with 0 failures
-and 12 skips by default, and 180 of 180 with a real Core (the
+and 13 skips by default, and 181 of 181 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -597,3 +597,15 @@ now also allows `data:`; all other directives are unchanged, and
 the CSP test pins the value. Verified in the headless harness
 under the real CSP: the codicon font loads and the chevrons
 render in the folding gutter.
+
+Follow-up (2026-10-29, user report): a vector-png's Editing
+preview failed with "Output already exists" on every reopen.
+The Core publishes build output exclusively, the previews
+directory persists across sessions, and the preview renderer's
+output name was a per-instance sequence restarting at 1 - so a
+reopened editor's first build always targeted the previous
+session's leftover file. Output names now carry a per-instance
+random token, and each instance sweeps its document's preview
+files older than an hour on first use. A real-Core regression
+test renders through two renderer instances sharing one
+directory and one document key.
