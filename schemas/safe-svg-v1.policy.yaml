@@ -75,7 +75,6 @@ attributes:
   - font-size
   - font-weight
   - font-style
-  - letter-spacing
   - text-anchor
   - dominant-baseline
   - dx

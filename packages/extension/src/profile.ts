@@ -14,7 +14,7 @@ export const SAFE_SVG_ATTRIBUTES: readonly string[] = [
   'transform', 'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width',
   'stroke-opacity', 'stroke-linecap', 'stroke-linejoin', 'stroke-miterlimit',
   'stroke-dasharray', 'stroke-dashoffset', 'opacity', 'font-family',
-  'font-size', 'font-weight', 'font-style', 'letter-spacing', 'text-anchor',
+  'font-size', 'font-weight', 'font-style', 'text-anchor',
   'dominant-baseline', 'dx', 'dy', 'rotate', 'offset', 'stop-color',
   'stop-opacity', 'gradientUnits', 'gradientTransform', 'spreadMethod',
   'fx', 'fy', 'fr', 'clip-path', 'clipPathUnits',

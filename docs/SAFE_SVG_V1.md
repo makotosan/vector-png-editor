@@ -15,7 +15,7 @@ it point for point, verified by direct comparison:
 | Area | Spec and Core agree |
 | --- | --- |
 | Elements | 18 SVG-namespace elements (svg, g, defs, title, desc, path, rect, circle, ellipse, line, polyline, polygon, text, tspan, linearGradient, radialGradient, stop, clipPath); anything else rejected |
-| Attributes | 52 unqualified attributes (the pinned profile's 51 plus `letter-spacing`, anticipated per the G1 note below); unknown or namespace-qualified attributes rejected (so `class`, `style`, `href`, event handlers are all out) |
+| Attributes | 51 unqualified attributes; unknown or namespace-qualified attributes rejected (so `class`, `style`, `href`, event handlers are all out) |
 | Values | No backslash, @, braces, semicolon, angle brackets, NUL or controls other than TAB/LF/CR in any attribute value; max 100,000 code points per value |
 | References | Only `url(#ID)`; on fill/stroke targeting a local gradient, on clip-path targeting a local clipPath; ids match `[A-Za-z_][A-Za-z0-9_.-]*` and are unique; no references inside resource definitions |
 | Structure | UTF-8 only; no DTD/entities/processing instructions; comments and an optional UTF-8 XML declaration allowed; root is `svg` in the SVG namespace |
@@ -23,10 +23,9 @@ it point for point, verified by direct comparison:
 | Numbers, colors, path data, transforms, fonts | **Not** validated by the allowlist: the spec assigns them to the bounded renderer ("Validate numeric/path syntax through a bounded renderer"). CairoSVG accepts or rejects at render time; font selection is host-dependent |
 | Parent-child relations | The spec defines **none**, and the Core enforces none |
 
-Differences and risks recorded: (1) the allowlist surface matches the
-pinned profile except for the single deliberate G1 anticipation
-(`letter-spacing`, below) - the remaining risk is *drift*, which the
-policy parity test now guards; (2) a file can pass profile
+Differences and risks recorded: (1) there are no spec-vs-implementation
+differences in the allowlist surface today - the risk is *drift*,
+which the policy parity test now guards; (2) a file can pass profile
 validation yet fail rendering (bad numbers/path data), which is why
 `validate` without `--syntax-only` also renders; (3) CLI naming: this
 product's shipped command is `vector-png-editor validate <file.svg>`
@@ -63,20 +62,6 @@ in compat mode its verdicts equal the Core's; with
 so AI-generated SVG is held to the stricter structure before any PNG
 is written. A failing validation never touches an existing PNG; the
 write path remains the revision-checked atomic build (P1-03/P2-04).
-
-## Amendment anticipation - `letter-spacing` (G1)
-
-The editor runs one attribute ahead of the pinned profile.
-makotosan/vector-png-spec#3 (amendment G1) adds `letter-spacing` to
-safe-svg-v1 as a presentation attribute; the spec amendment is being
-drafted in the specification repository in parallel. Until it merges
-and the pin in spec-reference.json is bumped in a separate step, the
-Core allowlist, the policy and the generated artifacts accept
-`letter-spacing` (52 attributes) while the pinned profile text still
-lists 51. The divergence is exactly this one attribute: every other
-allowlist verdict is unchanged, and the parity tests now guard the
-52-attribute surface. docs/SPEC_COMPATIBILITY.md records the change,
-its evidence and the follow-up pin bump.
 
 ## Status against Issue #22
 

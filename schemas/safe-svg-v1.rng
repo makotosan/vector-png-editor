@@ -39,7 +39,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -96,7 +95,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -153,7 +151,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -210,7 +207,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -267,7 +263,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -324,7 +319,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -381,7 +375,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -438,7 +431,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -495,7 +487,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -552,7 +543,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -609,7 +599,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -666,7 +655,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -723,7 +711,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -780,7 +767,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -837,7 +823,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -894,7 +879,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -951,7 +935,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>
@@ -1008,7 +991,6 @@
       <optional><attribute name="font-size"><text/></attribute></optional>
       <optional><attribute name="font-weight"><text/></attribute></optional>
       <optional><attribute name="font-style"><text/></attribute></optional>
-      <optional><attribute name="letter-spacing"><text/></attribute></optional>
       <optional><attribute name="text-anchor"><text/></attribute></optional>
       <optional><attribute name="dominant-baseline"><text/></attribute></optional>
       <optional><attribute name="dx"><text/></attribute></optional>

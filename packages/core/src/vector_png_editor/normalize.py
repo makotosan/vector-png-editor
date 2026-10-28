@@ -77,7 +77,7 @@ ENUMS = {
 PROPS = set(ENUMS) | set(
     "fill stroke stop-color opacity fill-opacity stroke-opacity stop-opacity "
     "stroke-width font-size stroke-miterlimit stroke-dashoffset stroke-dasharray "
-    "font-family clip-path rx ry marker-end letter-spacing".split()
+    "font-family clip-path rx ry marker-end".split()
 )
 INHERITED = PROPS - {"opacity", "clip-path", "stop-color", "stop-opacity", "rx", "ry"}
 NUMBER = r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)"
@@ -202,12 +202,6 @@ def _css_value(prop, raw):
         _scalar(low, 0, 1)
     elif prop in {"stroke-width", "font-size", "rx", "ry"}:
         _scalar(low, 0, px=True)
-    elif prop == "letter-spacing":
-        # Amendment G1 (makotosan/vector-png-spec#3): a signed decimal,
-        # optionally px. The keyword `normal` is not accepted, matching
-        # the amended section 3 table; materialization targets the new
-        # safe-svg-v1 presentation attribute of the same name.
-        _scalar(low, px=True)
     elif prop == "stroke-miterlimit":
         _scalar(low, 1)
     elif prop == "stroke-dashoffset":
@@ -579,52 +573,31 @@ def _check_ref_target(prop, val, ids):
 # ---------------------------------------------------------------- markers (section 3.1)
 
 def _path_points(d):
-    """Parse a marker host path; return (points, final tangent vector).
-
-    Amendment G2 (makotosan/vector-png-spec#3): absolute C segments are
-    admitted alongside M/L/H/V (S/Q/T and every other command remain
-    rejected). The final tangent of a cubic segment is endpoint minus
-    second control point, falling back to endpoint minus first control
-    point when the former is zero; if both are zero the host is
-    degenerate and rejected, as is a zero-length straight final segment.
-    """
-    tokens = re.findall(r"[MLHVC]|" + NUMBER, d)
+    tokens = re.findall(r"[MLHV]|" + NUMBER, d)
     if re.sub(r"[\s,]", "", "".join(tokens)) != re.sub(r"[\s,]", "", d):
-        _fail("unsupported-css", "markers", "Marker host path may use only absolute M/L/H/V/C segments")
-    points, index, command, tangent = [], 0, None, None
+        _fail("unsupported-css", "markers", "Marker host path may use only absolute M/L/H/V segments")
+    points, index, command = [], 0, None
     while index < len(tokens):
-        if tokens[index] in {"M", "L", "H", "V", "C"}:
+        if tokens[index] in {"M", "L", "H", "V"}:
             command = tokens[index]
             index += 1
-        count = 6 if command == "C" else 2 if command in {"M", "L"} else 1
-        if command is None or index + count > len(tokens) or any(t in {"M", "L", "H", "V", "C"} for t in tokens[index:index + count]):
+        count = 2 if command in {"M", "L"} else 1
+        if command is None or index + count > len(tokens) or any(t in {"M", "L", "H", "V"} for t in tokens[index:index + count]):
             _fail("unsupported-css", "markers", "Malformed marker host path")
         coords = [_scalar(t) for t in tokens[index:index + count]]
         index += count
-        if command == "C":
-            if not points:
-                _fail("unsupported-css", "markers", "Marker host path must start with a point")
-            end = (coords[4], coords[5])
-            tangent = (end[0] - coords[2], end[1] - coords[3])
-            if tangent == (0, 0):
-                tangent = (end[0] - coords[0], end[1] - coords[1])
-            points.append(end)
-            continue
         if command in {"H", "V"}:
             if not points:
                 _fail("unsupported-css", "markers", "Marker host path must start with a point")
             coords = [coords[0], points[-1][1]] if command == "H" else [points[-1][0], coords[0]]
         elif command == "M" and points:
             _fail("unsupported-css", "markers", "Marker host path must be a single subpath")
-        point = tuple(coords)
-        if points:
-            tangent = (point[0] - points[-1][0], point[1] - points[-1][1])
-        points.append(point)
+        points.append(tuple(coords))
         if command == "M":
             command = "L"
-    if len(points) < 2 or tangent is None or tangent == (0, 0):
+    if len(points) < 2 or points[-1] == points[-2]:
         _fail("unsupported-css", "markers", "Marker host path has a degenerate last segment")
-    return points, tangent
+    return points
 
 
 def _marker_definition(src, parent, computed):
@@ -731,11 +704,11 @@ def normalize_structure(source: bytes):
         src = ids[marker[5:-1]]
         ref_x, ref_y, child, paint, unit = markers[src]
         scale = _scalar(computed[node].get("stroke-width", "1"), 0, px=True) if unit == "strokeWidth" else 1
-        points, (dx, dy) = _path_points(node.get("d", ""))
-        x, y = points[-1]
+        points = _path_points(node.get("d", ""))
+        (x0, y0), (x, y) = points[-2:]
         if any(k in computed[node] for k in {"opacity", "clip-path"}) or "transform" in node.attrib:
             _fail("unsupported-css", "markers", "Marker host transform, opacity or clip-path is unsupported")
-        angle = math.degrees(math.atan2(dy, dx))
+        angle = math.degrees(math.atan2(y - y0, x - x0))
         group = ET.Element("{" + SVG_NS + "}g", {
             "transform": f"translate({x:g} {y:g}) rotate({angle:g}) scale({scale:g}) translate({-ref_x:g} {-ref_y:g})",
             "fill": paint, "stroke": "none"})

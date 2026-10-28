@@ -8,12 +8,12 @@
   },
   "policy": {
     "file": "safe-svg-v1.policy.yaml",
-    "sha256": "9022c8321f5bc86cc71f0078d073bf48eb6333879bffc36454ccefb8cebf4054"
+    "sha256": "0c6a7eeaa7bca9beb1665efb92c52af92fded5845ed3291aa499f24bed0f1ef9"
   },
   "artifacts": {
-    "safe-svg-v1.monaco.json": "9ff166650eed583daf15ca84189b6b7cca3b1a724110be2ad16687b0f9696a1e",
-    "safe-svg-v1.rng": "3edc780fc0d0feb895427444adea23653c41a6995893b25ea771c31bd1d349bb",
-    "safe-svg-v1.rules.md": "45b6d87b1782c2ff8f110ee90cc680b34973f611aae9a16fbe9ff7b32dfa5485"
+    "safe-svg-v1.monaco.json": "86700c20452663131db4881385a57a6ab2ed4f29e3724d3a99a8d1d27ee80915",
+    "safe-svg-v1.rng": "54f1490acb3179c2c92177c67f55739766ea57bb5bc12d838737adfd17f82692",
+    "safe-svg-v1.rules.md": "a8358804bee63a0260d1034ab2cc20478784c59ca25cfd9309c176d7c4c7c573"
   },
   "generator": "tools/generate_safe_svg_schemas.py"
 }
