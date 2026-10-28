@@ -42,6 +42,7 @@ export function buildEditorHtml(assets: WebviewAssets): string {
       <button id="tool-save" type="button">Save</button>
       <button id="tool-format" type="button">Format</button>
       <button id="tool-wrap" type="button" aria-pressed="false" title="Toggle word wrap (Alt+Z)">Wrap</button>
+      <button id="tool-copy" type="button">Copy SVG</button>
       <span id="meta">Loading…</span>
     </div>
     <div id="editor"></div>
@@ -77,9 +78,8 @@ export function buildEditorHtml(assets: WebviewAssets): string {
       <img id="preview" alt="PNG preview">
     </div>
     <div id="preview-actions">
-      <button id="action-copy" type="button">Copy</button>
-      <button id="action-export" type="button">Export</button>
-      <button id="action-export-png" type="button">Export PNG</button>
+      <button id="action-export" type="button">Export SVG</button>
+      <button id="action-export-png" type="button">Export Plain PNG</button>
     </div>
     <div id="preview-actions-svg" hidden>
       <button id="action-normalize" type="button">Normalize SVG</button>

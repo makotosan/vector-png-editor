@@ -128,9 +128,9 @@ editable kinds.
 | FILL + Apply | Edits the root `<svg>` `fill` as one undoable edit on Apply; the row is disabled when no root element can be located | Same |
 | PNG (preview toggle) | Shows the raster image stored in the file | Disabled (greyed out): an SVG file holds no PNG image |
 | Editing (preview toggle) | The current source rendered by the Core (Core required; a profile-invalid source shows the failure instead) | The current text rendered in place (no Core needed; never blocked by validation) |
-| Copy | Copies the current source text | Same |
-| Export | Saves the current source as `.svg` (default name `<base>.svg`) | Same (default name `<base>-copy.svg`) |
-| Export PNG | Saves a plain PNG with no embedded source (default `<base>.plain.png`; Core required; a non-conforming source renders via normalization and says so) | Same (default `<base>.png`; Core required) |
+| Copy SVG (code toolbar, beside Wrap) | Copies the current source text | Same |
+| Export SVG | Saves the current source as `.svg` (default name `<base>.svg`) | Same (default name `<base>-copy.svg`) |
+| Export Plain PNG | Saves a plain PNG with no embedded source (default `<base>.plain.png`; Core required; a non-conforming source renders via normalization and says so) | Same (default `<base>.png`; Core required) |
 | Normalize SVG | — (command and button are SVG-only) | Button under the action row, SVG documents only: applies Core normalization as one undoable edit (Core required) |
 | Export as Vector PNG | — (command and button are SVG-only) | Button under the action row, SVG documents only: writes the sibling `.png` as a vector-png (Core required); the source file is never modified |
 
