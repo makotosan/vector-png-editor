@@ -87,8 +87,8 @@ function refreshPreview() {
   const status = document.getElementById('preview-status');
   status.textContent = previewState.mode === 'edited'
     ? (previewState.editedError ?? (previewState.editedUri
-      ? (previewState.editedRevision < revision ? 'Rendering the edited preview…' : '')
-      : 'No edited preview yet.'))
+      ? (previewState.editedRevision < revision ? 'Rendering the editing preview…' : '')
+      : 'No editing preview yet.'))
     : '';
 }
 document.getElementById('show-saved').addEventListener('click', () => {
@@ -110,7 +110,7 @@ document.getElementById('show-edited').addEventListener('click', () => {
 // FILL value is not panel state - it always mirrors the source and
 // arrives from the host.
 const persistedPanel = vscode.getState() ?? {};
-if (persistedPanel.previewMode === 'edited') previewState.showEdited();
+if (persistedPanel.previewMode === 'saved') previewState.showSaved();
 previewState.setBackgroundPreset(typeof persistedPanel.backgroundPreset === 'string' ? persistedPanel.backgroundPreset : 'checkerboard');
 if (typeof persistedPanel.customColor === 'string') previewState.setBackgroundCustom(persistedPanel.customColor);
 if (previewState.mode !== 'saved') vscode.postMessage({ type: 'setPreviewMode', mode: previewState.mode });
@@ -327,6 +327,20 @@ window.addEventListener('message', (event) => {
     };
     savedUri = message.previewUri;
     documentKind = typeof message.kind === 'string' ? message.kind : 'vector-png';
+    if (documentKind === 'svg') {
+      // An SVG file holds no PNG image: the PNG view is unavailable
+      // and the pane stays on Editing (user decision, 2026-10-29).
+      const pngButton = document.getElementById('show-saved');
+      if (pngButton) {
+        pngButton.disabled = true;
+        pngButton.title = 'An SVG file has no PNG image';
+      }
+      if (previewState.mode !== 'edited') {
+        previewState.showEdited();
+        vscode.postMessage({ type: 'setPreviewMode', mode: 'edited' });
+        persistPanelState();
+      }
+    }
     refreshPreview();
     refreshBackground();
     if (message.rootFill) refreshRootFill(message.rootFill.available === true, typeof message.rootFill.value === 'string' ? message.rootFill.value : '');

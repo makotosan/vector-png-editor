@@ -10,13 +10,17 @@ async function loadState() {
   return sandbox.window.VpePreviewState.createPreviewState();
 }
 
-test('starts on the saved raster; results never auto-toggle', async () => {
+test('starts on the editing view; results never auto-toggle', async () => {
   const s = await loadState();
-  assert.equal(s.mode, 'saved');
-  assert.equal(s.visibleUri('saved.png'), 'saved.png');
+  assert.equal(s.mode, 'edited', 'the pane opens on Editing');
+  assert.equal(s.visibleUri('saved.png'), null, 'no render has arrived yet');
   s.editedRendered('edited-1.png', 1);
+  assert.equal(s.mode, 'edited');
+  assert.equal(s.visibleUri('saved.png'), 'edited-1.png');
+  s.showSaved();
+  s.editedRendered('edited-2.png', 2);
   assert.equal(s.mode, 'saved', 'an arriving preview must not switch the mode');
-  assert.equal(s.visibleUri('saved.png'), 'saved.png', 'saved mode always shows the actual saved raster');
+  assert.equal(s.visibleUri('saved.png'), 'saved.png', 'the PNG mode always shows the raster the file holds');
 });
 
 test('manual toggle switches both ways and picks the latest edited render', async () => {

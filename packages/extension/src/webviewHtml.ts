@@ -68,8 +68,8 @@ export function buildEditorHtml(assets: WebviewAssets): string {
     </div>
     <div id="preview-mode-row">
       <div id="preview-toggle" role="group" aria-label="Preview source">
-        <button id="show-saved" type="button">Saved</button>
-        <button id="show-edited" type="button">Edited</button>
+        <button id="show-saved" type="button">PNG</button>
+        <button id="show-edited" type="button">Editing</button>
       </div>
       <div id="preview-status"></div>
     </div>
