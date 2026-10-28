@@ -497,8 +497,15 @@ to match the element nesting, never joins or splits lines, and
 leaves `<style>`/`<text>`/`<tspan>` content, comments and CDATA
 byte-for-byte untouched; an already formatted source is a no-op
 reported on the meta line. A **Wrap** toolbar button and the
-**Alt+Z** shortcut toggle Monaco word wrap for the code pane
-(off by default); the choice persists per panel in the webview
+extension command **Vector PNG: Toggle Word Wrap** toggle Monaco
+word wrap for the code pane (off by default). The command carries
+an **Alt+Z** keybinding scoped to this editor being the active
+custom editor (`activeCustomEditorId == vectorPng.editor`) and is
+also on the command palette and the webview context menu; the
+provider tracks the active panel and posts the toggle to its
+webview. (VS Code's own View-menu word-wrap item targets text
+editors and stays disabled in a custom editor, so the shortcut is
+the extension's own.) The choice persists per panel in the webview
 state alongside the preview mode and background. **Copy** writes the current source text
 to the clipboard on the host and confirms on the meta line.
 **Export** shows a save dialog (default `<base>.svg` for a
@@ -530,8 +537,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 165 tests with 0 failures
-and 12 skips by default, and 177 of 177 with a real Core (the
+Verification: the extension suite passes 166 tests with 0 failures
+and 12 skips by default, and 178 of 178 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -542,7 +549,7 @@ idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
 design-B CSS variables, the Monaco theme sync, the word-wrap toggle
-(Alt+Z and the Wrap button, persisted per panel), and the plain-PNG export with fake
+(the Toggle Word Wrap command and the Wrap button, persisted per panel), and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,
 convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live

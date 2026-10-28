@@ -148,6 +148,10 @@ function loadSchemaProfile(extensionUri: vscode.Uri): SchemaProfile | null {
 class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDocument> {
   private readonly changeEmitter = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<VectorPngDocument>>();
   readonly onDidChangeCustomDocument = this.changeEmitter.event;
+  // The editable-editor panel that is currently active, if any, so
+  // workbench commands (Toggle Word Wrap, Alt+Z) can reach its
+  // webview. Tracked from the panels' view-state changes.
+  private activeEditorPanel: vscode.WebviewPanel | undefined;
   // Live documents by URI string, so commands (export) can find the
   // open document - and its possibly unsaved source - for a file.
   private readonly documents = new Map<string, VectorPngDocument>();
@@ -425,9 +429,15 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     });
     // Menu enablement for kind-specific commands (Normalize SVG is
     // .svg-only): track the active panel's document kind as context.
+    // The same hook tracks the active editor panel itself, so the
+    // Toggle Word Wrap command can post to its webview.
     const updateKindContext = () => {
-      if (panel.active)
+      if (panel.active) {
+        this.activeEditorPanel = panel;
         void vscode.commands.executeCommand('setContext', 'vectorPng.documentIsSvg', document.kind === 'svg');
+      } else if (this.activeEditorPanel === panel) {
+        this.activeEditorPanel = undefined;
+      }
     };
     const viewStateSubscription = panel.onDidChangeViewState(updateKindContext);
     updateKindContext();
@@ -611,7 +621,15 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       noticeSubscription.dispose();
       viewStateSubscription.dispose();
       preview.dispose();
+      if (this.activeEditorPanel === panel) this.activeEditorPanel = undefined;
     });
+  }
+
+  // "Vector PNG: Toggle Word Wrap" (Alt+Z while this editor is the
+  // active custom editor): the wrap state itself lives in the
+  // webview, so the command just asks the active panel to toggle.
+  toggleWordWrapOnActivePanel(): void {
+    void this.activeEditorPanel?.webview.postMessage({ type: 'toggleWordWrap' });
   }
 
   async saveCustomDocument(document: VectorPngDocument, cancellation: vscode.CancellationToken): Promise<void> {
@@ -1023,6 +1041,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('vectorPng.normalizeSvg', (target?: vscode.Uri) => provider.normalizeSvg(target)),
     vscode.commands.registerCommand('vectorPng.newDocument', newDocument),
     vscode.commands.registerCommand('vectorPng.setupEnvironment', () => setupEnvironment(context, managedRoot)),
+    vscode.commands.registerCommand('vectorPng.toggleWordWrap', () => provider.toggleWordWrapOnActivePanel()),
     vscode.commands.registerCommand('vectorPng.environmentStatus', () => environmentStatus(managedRoot)),
     vscode.commands.registerCommand('vectorPng.rollbackEnvironment', async () => {
       try {

@@ -97,15 +97,13 @@ function toggleWordWrap() {
 }
 const wrapButton = document.getElementById('tool-wrap');
 if (wrapButton) wrapButton.addEventListener('click', toggleWordWrap);
-// Capture phase, so the toggle fires exactly once even when Monaco
-// has focus (and regardless of any binding Monaco itself may have);
-// holding the keys down does not strobe the setting.
-document.addEventListener('keydown', (event) => {
-  if (!event.altKey || event.ctrlKey || event.metaKey || event.code !== 'KeyZ') return;
-  event.preventDefault();
-  event.stopPropagation();
-  if (!event.repeat) toggleWordWrap();
-}, true);
+// Alt+Z is a workbench keybinding, not a page shortcut: the
+// extension contributes vectorPng.toggleWordWrap (Alt+Z while this
+// editor is the active custom editor, also on the command palette
+// and the webview context menu), and the host posts a
+// 'toggleWordWrap' message here. Owning the key on the host side
+// means it works wherever focus sits in the workbench and can never
+// double-toggle against a page-level listener.
 refreshWordWrap();
 
 function refreshBackground() {
@@ -294,6 +292,8 @@ window.addEventListener('message', (event) => {
     }
   } else if (message.type === 'rootFill') {
     refreshRootFill(message.available === true, typeof message.value === 'string' ? message.value : '');
+  } else if (message.type === 'toggleWordWrap') {
+    toggleWordWrap();
   } else if (message.type === 'notice') {
     document.getElementById('meta').textContent = message.text;
   } else if (message.type === 'saved') {
