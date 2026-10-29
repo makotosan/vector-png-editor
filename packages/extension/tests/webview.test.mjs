@@ -152,8 +152,12 @@ test('edited previews never load as webview resources (Issue #47 follow-up)', as
   assert.match(js, /The source has no <svg> root element to preview/,
     'a source without an svg root reports the invalid outcome instead of a broken image');
   const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
-  assert.match(host, /data:image\/png;base64,\$\{Buffer\.from\(bytes\)\.toString\('base64'\)\}/,
-    'a Core-rendered PNG preview is posted as a data URI');
+  assert.match(host, /type: 'previewRendered', revision: event\.revision, uri: event\.imageUri/,
+    'a Core-rendered PNG preview is posted as the data URI the renderer produced');
+  const renderer = await readFile(new URL('../src/corePreview.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /data:image\/png;base64,\$\{Buffer\.from\(rendered\.png\)\.toString\('base64'\)\}/,
+    'the TS Core preview renderer resolves a PNG data URI');
+  assert.ok(!host.includes('previewDir'), 'the temp-file preview directory plumbing is gone');
   assert.match(host, /kind: document\.kind/, 'init tells the webview the document kind');
   assert.ok(!host.includes('createSvgPreviewRenderer'), 'the temporary-file SVG preview renderer is gone');
 });

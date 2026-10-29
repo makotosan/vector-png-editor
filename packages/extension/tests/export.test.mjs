@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { exportSvgAsVectorPng, ExportUnavailableError } from '../src/export.ts';
 import { createCoreExportDeps } from '../src/coreExport.ts';
+import { createTsCoreRuntime } from '../src/tsCore.ts';
+import { loadHostFonts } from '../src/hostFonts.ts';
 import { extractSource } from '../src/extract.ts';
 
 const VALID = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>';
@@ -163,16 +165,20 @@ test('a build conflict surfaces as a failure, not a silent overwrite', async () 
   assert.deepEqual(result, { status: 'failed', stage: 'build', code: 'conflict', message: 'destination changed' });
 });
 
-// Real-Core integration: set VECTOR_PNG_TEST_PYTHON to a Python with
-// the Core importable. Skipped (not faked) when no Core is available.
+// Integration: validate and build now run in-process on the
+// TypeScript Core (Issue #58), so the build route is tested by
+// default. The normalization route still runs the Python Core's
+// `convert` (Phase 2, Issue #59): its test stays gated on
+// VECTOR_PNG_TEST_PYTHON, a Python with the Core importable.
+const runtime = createTsCoreRuntime({ fonts: loadHostFonts() });
 const python = process.env.VECTOR_PNG_TEST_PYTHON;
 const maybe = python ? test : test.skip;
 
-maybe('real Core: valid source exports a vector-png that round-trips', async () => {
+test('TS Core: valid source exports a vector-png that round-trips', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vpe-export-'));
   const target = join(dir, 'doc.png');
   const deps = {
-    ...createCoreExportDeps(python),
+    ...createCoreExportDeps(undefined, runtime),
     confirmOverwrite: async () => true,
     presentDiagnostics: async () => 'cancel',
   };
@@ -182,14 +188,14 @@ maybe('real Core: valid source exports a vector-png that round-trips', async () 
   assert.equal(extractSource(await readFile(target)).text, VALID);
 });
 
-maybe('real Core: styled source exports via normalization and the source is untouched', async () => {
+maybe('styled source exports via normalization (Python convert) and the source is untouched', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vpe-export-'));
   const sourcePath = join(dir, 'doc.svg');
   await writeFile(sourcePath, STYLED, 'utf8');
   const target = join(dir, 'doc.png');
   let presented = 0;
   const deps = {
-    ...createCoreExportDeps(python),
+    ...createCoreExportDeps(python, runtime),
     confirmOverwrite: async () => true,
     presentDiagnostics: async (diagnostics) => {
       presented = diagnostics.length;
