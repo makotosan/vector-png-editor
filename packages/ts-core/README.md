@@ -6,11 +6,13 @@ that replaces the Python Core and its CairoSVG rendering stack
 Issue #57).
 
 Ported so far: the renderer, the PNG container, and safe-svg-v1
-validation. Not yet ported: svg-normalization-v1, the extension
-integration, the verify path (render + pixel comparison), and the
-Core's file-publication wrappers (extract/build writing to paths
-with no-overwrite semantics — the byte-level functions are here;
-callers own file policy, as the extension does today).
+validation - and the extension integration (Issue #58): the
+extension's open/inspect, edited previews, save and export
+build/validate paths run on this package in-process, with the
+extension owning file publication policy (its src/tsCore.ts
+mirrors the Python Core's writing.py discipline). Not yet
+ported: svg-normalization-v1 (Phase 2, Issue #59) and the
+standalone verify path (render + pixel comparison).
 
 ## Contents
 
@@ -19,6 +21,9 @@ callers own file policy, as the extension does today).
   mirroring the Issue #57 spike's setup (font buffers per
   construction, system fonts off, "Noto Sans" family defaults,
   transparent background, matching the Core's Cairo gate path).
+  A host whose module layout cannot resolve the wasm package from
+  here (the bundled extension) supplies the binary once with
+  `setWasmSource(path | bytes)` before the first render.
 - `src/fonts.ts` — font ingestion: font files, with caller-stated
   family/style/weight, become the `FontBuffer` list the renderer
   consumes. Which fonts are supplied decides text rendering, so
