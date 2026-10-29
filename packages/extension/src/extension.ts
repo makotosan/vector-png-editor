@@ -398,11 +398,21 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       const fill = readRootFill(document.pendingSource ?? '');
       void panel.webview.postMessage({ type: 'rootFill', available: fill.available, value: fill.value });
     };
+    // The webview's revision counter advances only on its own typed
+    // edits, and its preview status clears only once a render arrives
+    // tagged with that revision. Host-originated syncs do not advance
+    // the counter, so their renders are tagged with the last revision
+    // the webview reported - the render of the source it currently
+    // shows (the controller's generation guard discards anything a
+    // newer typed edit supersedes). Tagging a sync render -1 instead
+    // left the "Rendering the editing preview…" status up forever
+    // (live check, 2026-10-30).
+    let lastWebviewRevision = 0;
     const syncSubscription = document.onSourceSync(panelId, (source) => {
       void panel.webview.postMessage({ type: 'sourceSync', source });
       postRootFill();
       sendDiagnostics(source);
-      preview?.schedule(source, -1);
+      preview?.schedule(source, lastWebviewRevision);
     });
     const savedSubscription = document.onSaved(() => {
       void panel.webview.postMessage({ type: 'saved', previewUri: savedUri() });
@@ -426,7 +436,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     updateKindContext();
     // Show the Core-rendered edited preview for the untouched source too;
     // the pane still opens on the saved raster and never auto-switches.
-    if (document.pendingSource !== undefined) preview?.schedule(document.pendingSource, 0);
+    if (document.pendingSource !== undefined) preview?.schedule(document.pendingSource, lastWebviewRevision);
 
     // Issue #45 panel actions. A host-originated source change (root
     // fill, Format) goes through the same machinery as Normalize
@@ -541,6 +551,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         });
         sendDiagnostics(document.pendingSource ?? '');
       } else if (message.type === 'sourceChanged') {
+        lastWebviewRevision = message.revision;
         const next = message.source;
         // The history is the single authority: an echo of a host sync
         // (or a no-op change) records nothing and fires no edit event,
