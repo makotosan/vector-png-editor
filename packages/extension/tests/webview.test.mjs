@@ -183,3 +183,22 @@ test('SVG documents get Normalize SVG and Export as Vector PNG panel buttons (Is
   assert.match(host, /message\.type === 'exportAsVectorPng'\) \{\s*void this\.exportAsVectorPng\(document\.uri\);/,
     'the host runs the existing Export as Vector PNG command logic for this document');
 });
+
+test('host-originated syncs are undoable Monaco edits, not setValue (Issue #18 items 5.7/6.2)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  const syncBlock = js.slice(js.indexOf("message.type === 'sourceSync'"), js.indexOf("message.type === 'previewRendered'"));
+  assert.match(syncBlock, /editor\.executeEdits\('vectorPng\.hostSync', \[\{ range: model\.getFullModelRange\(\), text: message\.source \}\]\);/);
+  assert.match(syncBlock, /editor\.pushUndoStop\(\);/);
+  // The init handler keeps setValue: the freshly loaded source must
+  // not be undoable back to an empty model.
+  const initBlock = js.slice(js.indexOf("message.type === 'init'"), js.indexOf("message.type === 'rootFill'"));
+  assert.match(initBlock, /editor\.setValue\(message\.source\);/);
+});
+
+test('Environment Status flags a configured Python path that does not exist (Issue #18 item 7.1)', async () => {
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /import \{ existsSync \} from 'node:fs';/);
+  assert.match(host, /\(file not found\)/, 'a missing configured/effective path is annotated in the status dialog');
+  assert.match(host, /notFound\(configured\)/, 'the configured line is annotated');
+  assert.match(host, /notFound\(effective\)/, 'the effective line is annotated');
+});

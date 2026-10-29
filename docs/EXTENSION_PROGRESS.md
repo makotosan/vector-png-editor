@@ -567,8 +567,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 168 tests with 0 failures
-and 13 skips by default, and 181 of 181 with a real Core (the
+Verification: the extension suite passes 170 tests with 0 failures
+and 13 skips by default, and 183 of 183 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -626,3 +626,20 @@ always reads "Rendering the editing preview…", and the status
 clears only when the current revision's render is on screen.
 The "not there yet" wording survives nowhere: every state
 without an image and without an error has a render in flight.
+
+Follow-up (2026-10-29, macOS acceptance run, Issue #18): the
+checklist run passed everything except two undo cases and the
+Environment Status item. Items 5.7 (FILL Apply) and 6.2
+(Normalize SVG) showed that host-originated edits could not be
+undone with Cmd+Z in the code area: the webview applied host
+source updates with Monaco's `editor.setValue()`, which
+discards the undo stack. `sourceSync` now applies through
+`editor.executeEdits('vectorPng.hostSync', ...)` with
+`pushUndoStop()` - verified undoable against the bundled
+Monaco, including the focused keyboard path - while the initial
+load keeps `setValue` so a freshly loaded source cannot be
+undone to an empty model. Item 7.1: Environment Status showed a
+nonexistent configured Python path as the Effective Python with
+no hint it was invalid; the status now annotates a missing
+configured or effective path with "(file not found)". Full
+results are recorded in docs/TEST_RESULTS.md.

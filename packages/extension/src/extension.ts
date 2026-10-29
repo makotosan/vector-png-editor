@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { randomBytes, createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { detectPng } from './detect.ts';
 import { routeFor, routeForFile } from './routing.ts';
@@ -1035,10 +1036,16 @@ async function environmentStatus(managedRoot: string): Promise<void> {
   const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
   const managed = await managedPython(managedRoot);
   const effective = await resolveCorePython(managedRoot, configured);
+  // A configured (or resolved) path that does not exist must not be
+  // presented as usable: the macOS acceptance run (Issue #18, item
+  // 7.1) set /nonexistent/python3 and the status showed it as the
+  // Effective Python with no hint that it was invalid.
+  const notFound = (path: string | undefined): string =>
+    path !== undefined && path.trim() !== '' && !existsSync(path.trim()) ? ' (file not found)' : '';
   const lines = [
-    `Configured Python: ${configured?.trim() ? configured : '(not set)'}`,
+    `Configured Python: ${configured?.trim() ? configured : '(not set)'}${notFound(configured)}`,
     `Managed environment: ${managed ?? '(none - run "Vector PNG: Set Up Python Environment")'}`,
-    `Effective Python: ${effective ?? '(none - edited previews and saving are unavailable; the saved PNG preview still works)'}`,
+    `Effective Python: ${effective ?? '(none - edited previews and saving are unavailable; the saved PNG preview still works)'}${notFound(effective)}`,
   ];
   void vscode.window.showInformationMessage(lines.join('  '), { modal: true });
 }
