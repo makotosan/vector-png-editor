@@ -13,11 +13,13 @@
   check OK).
 - **Executor:** Codex on the user's machine; the user submitted the
   filled checklist v2 on 2026-10-29.
-- **Verdict:** macOS acceptance is **not yet complete**. Everything
-  passed except three items that differ from the expected outcome
-  (5.7 FILL undo, 6.2 Normalize undo, 7.1 Environment Status). All
-  three were root-caused and fixed on the PR #56 branch after this
-  run (build 14); a re-check of those items is pending.
+- **Verdict:** macOS acceptance is **complete**. The first pass
+  (build 13) passed everything except three items that differed
+  from the expected outcome (5.7 FILL undo, 6.2 Normalize undo,
+  7.1 Environment Status); all three were root-caused, fixed on
+  the PR #56 branch, and passed a re-check with build 14 later
+  the same day (see "Re-check" below). The user declared the
+  macOS acceptance complete on 2026-10-29.
 
 ### Section results
 
@@ -90,14 +92,32 @@
   applies through `editor.executeEdits('vectorPng.hostSync', …)`
   with `pushUndoStop()`; the initial load keeps `setValue` on
   purpose, so a freshly loaded source cannot be undone back to an
-  empty model. Re-check with build 14 pending.
+  empty model.
 - **F2 — Environment Status presented a nonexistent Python as
   usable** (item 7.1). With `vectorPng.corePythonPath` set to
   `/nonexistent/python3`, the status dialog showed it as the
   Configured and Effective Python with no indication it was
   invalid. **Fix (PR #56):** the status now annotates a missing
   configured or effective path with "(file not found)".
-  Re-check with build 14 pending.
+
+### Re-check — 2026-10-29 (build 14)
+
+The build-14 VSIX (SHA-256
+`2088039b49a3ed131764f4a5de96dcd4b7c31eff777c011b7f1f4e38e9122090`,
+matched before install) was installed and the window reloaded.
+All three differing items passed:
+
+- **F1, FILL (item 5.7):** after entering `#ff0000` and Apply, a
+  single Cmd+Z reverted the fill; an Export SVG afterwards was
+  byte-identical to the original source.
+- **F1, Normalize (item 6.2):** on an SVG with `<style>` and
+  `class`, Normalize SVG completed with its summary notification;
+  after one Cmd+Z, an Export SVG was byte-identical to the
+  pre-normalization source.
+- **F2 (item 7.1):** with `vectorPng.corePythonPath` set to
+  `/nonexistent/python3`, Environment Status showed
+  `/nonexistent/python3 (file not found)` on both the Configured
+  and Effective lines. The test setting was removed afterwards.
 
 ### Remaining acceptance scope
 
