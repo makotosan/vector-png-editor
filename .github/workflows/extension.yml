@@ -15,6 +15,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
+      - name: Install the TypeScript Core dependency (the extension suites import it in-process)
+        working-directory: packages/ts-core
+        run: npm install --ignore-scripts --no-audit --no-fund
       - name: Type-check and unit-test the extension package
         working-directory: packages/extension
         run: |
