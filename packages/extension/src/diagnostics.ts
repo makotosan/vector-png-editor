@@ -2,7 +2,7 @@ import { SAFE_SVG_ATTRIBUTES, SAFE_SVG_ELEMENTS, MAX_ELEMENTS } from './profile.
 
 // Advisory safe-svg-v1 diagnostics computed by scanning source text.
 // This is a text scan, not an XML parse and never a DOM: hostile markup is
-// treated as characters. The Python Core validator stays authoritative;
+// treated as characters. The Core validator stays authoritative;
 // these diagnostics only guide editing (completion/search feedback loop).
 export type Diagnostic = {
   code: 'unsupported-element' | 'unsupported-attribute' | 'forbidden-construct' | 'external-reference' | 'too-many-elements';

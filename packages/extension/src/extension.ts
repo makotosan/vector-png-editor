@@ -24,6 +24,8 @@ import { readFileSync } from 'node:fs';
 import { buildEditorHtml, buildViewHtml } from './webviewHtml.ts';
 import { PreviewController } from './preview.ts';
 import { createCorePreviewRenderer } from './corePreview.ts';
+import { loadHostFonts } from './hostFonts.ts';
+import { createTsCoreRuntime, type TsCoreRuntime } from './tsCore.ts';
 import { saveInPlace, saveAs } from './save.ts';
 import { createCoreSaveDeps } from './coreSave.ts';
 import { SourceHistory } from './history.ts';
@@ -171,9 +173,8 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly storageUri: vscode.Uri | undefined,
-    private readonly extensionDir: string,
     private readonly managedRoot: string,
+    private readonly tsRuntime: TsCoreRuntime,
   ) {}
 
   // Python resolution (P2-07): an explicit setting wins; otherwise
@@ -338,12 +339,9 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   async resolveCustomEditor(document: VectorPngDocument, panel: vscode.WebviewPanel): Promise<void> {
     const mediaRoot = vscode.Uri.joinPath(this.extensionUri, 'media');
     const webviewRoot = vscode.Uri.joinPath(this.extensionUri, 'webview');
-    const previewDirUri = this.storageUri
-      ? vscode.Uri.joinPath(this.storageUri, 'previews')
-      : vscode.Uri.joinPath(document.uri, '..');
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: [mediaRoot, webviewRoot, vscode.Uri.joinPath(document.uri, '..'), previewDirUri],
+      localResourceRoots: [mediaRoot, webviewRoot, vscode.Uri.joinPath(document.uri, '..')],
     };
     const asUri = (uri: vscode.Uri) => panel.webview.asWebviewUri(uri).toString();
     const savedUri = () => panel.webview.asWebviewUri(document.uri)
@@ -375,39 +373,26 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     }
     panel.webview.html = buildEditorHtml(assets);
 
-    const documentKey = createHash('sha256').update(document.uri.toString()).digest('hex').slice(0, 16);
     // Edited previews never travel as webview resources: in a real
     // VS Code host the temporary preview files are refused with a
     // 401 by the webview resource server (found in the Issue #18
     // live check, 2026-10-29), while the saved file - a real
-    // workspace file - loads fine. So a vector-png's Core-rendered
-    // PNG is posted to the webview as a data URI, and a plain SVG's
-    // edited preview is rendered inside the webview itself from the
-    // model text (blob URL; the Core preview path validates first
-    // and cannot show a general SVG at all - Issue #47). Display is
+    // workspace file - loads fine. So a vector-png's edited preview
+    // is rendered in-process by the TypeScript Core (Issue #58) and
+    // posted to the webview as a data URI, and a plain SVG's edited
+    // preview is rendered inside the webview itself from the model
+    // text (blob URL; the Core preview path validates first and
+    // cannot show a general SVG at all - Issue #47). Display is
     // never blocked by the profile.
     const preview = document.kind === 'svg' ? undefined : new PreviewController(
       createCorePreviewRenderer({
-        pythonPath: await this.corePythonPath(),
-        previewDir: previewDirUri.fsPath,
+        runtime: this.tsRuntime,
         width: document.width,
         height: document.height,
-        documentKey,
       }),
       (event) => {
         if (event.type === 'rendered') {
-          void (async () => {
-            try {
-              const bytes = await vscode.workspace.fs.readFile(vscode.Uri.file(event.imagePath));
-              const uri = `data:image/png;base64,${Buffer.from(bytes).toString('base64')}`;
-              void panel.webview.postMessage({ type: 'previewRendered', revision: event.revision, uri });
-            } catch (error) {
-              void panel.webview.postMessage({
-                type: 'previewUnavailable', revision: event.revision,
-                message: error instanceof Error ? error.message : String(error),
-              });
-            }
-          })();
+          void panel.webview.postMessage({ type: 'previewRendered', revision: event.revision, uri: event.imageUri });
         } else if (event.type === 'invalid') {
           void panel.webview.postMessage({ type: 'previewInvalid', revision: event.revision, message: event.message });
         } else {
@@ -509,7 +494,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       const source = document.pendingSource ?? document.savedSource ?? '';
       const defaultName = document.kind === 'svg' ? `${documentStem()}.png` : `${documentStem()}.plain.png`;
       const deps = {
-        ...createCorePlainPngDeps(await this.corePythonPath()),
+        ...createCorePlainPngDeps(await this.corePythonPath(), this.tsRuntime),
         chooseTarget: async (defaultPath: string): Promise<string | null> => {
           const target = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file(defaultPath),
@@ -686,7 +671,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         const expected = document.tracker.isDeleted || forceOverwrite ? undefined : document.tracker.agreedSha;
         await saveSvgTextFile(createNodeSvgSaveDeps(), document.uri.fsPath, source, expected);
       } else {
-        const deps = createCoreSaveDeps(await this.corePythonPath());
+        const deps = createCoreSaveDeps(this.tsRuntime);
         if (document.tracker.isDeleted) {
           // Recreate a file deleted on disk from the preserved buffer.
           await saveAs(deps, document.uri.fsPath, {
@@ -721,7 +706,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         // The Save As dialog already confirmed any replacement.
         await saveSvgTextFile(createNodeSvgSaveDeps(), targetUri.fsPath, source, undefined);
       } else {
-        await saveAs(createCoreSaveDeps(await this.corePythonPath()), targetUri.fsPath, {
+        await saveAs(createCoreSaveDeps(this.tsRuntime), targetUri.fsPath, {
           source, width: document.width, height: document.height,
           isCancelled: () => cancellation.isCancellationRequested,
         });
@@ -818,7 +803,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     }
     const targetPath = uri.fsPath.replace(/\.svg$/i, '.png');
     const deps = {
-      ...createCoreExportDeps(await this.corePythonPath()),
+      ...createCoreExportDeps(await this.corePythonPath(), this.tsRuntime),
       confirmOverwrite: async (path: string): Promise<boolean> => {
         const name = path.split('/').pop() ?? path;
         const choice = await vscode.window.showWarningMessage(
@@ -1023,7 +1008,7 @@ async function setupEnvironment(context: vscode.ExtensionContext, managedRoot: s
           onProgress: (stage) => progress.report({ message: stage }),
         });
       });
-    void vscode.window.showInformationMessage(`Vector PNG: environment ready (${result.python}). Edited previews and saving now use the Python Core.`);
+    void vscode.window.showInformationMessage(`Vector PNG: environment ready (${result.python}). Normalize SVG can now use the Python Core.`);
   } catch (error) {
     const stage = error instanceof EnvironmentError ? error.stage : '';
     const message = error instanceof Error ? error.message : String(error);
@@ -1045,14 +1030,26 @@ async function environmentStatus(managedRoot: string): Promise<void> {
   const lines = [
     `Configured Python: ${configured?.trim() ? configured : '(not set)'}${notFound(configured)}`,
     `Managed environment: ${managed ?? '(none - run "Vector PNG: Set Up Python Environment")'}`,
-    `Effective Python: ${effective ?? '(none - edited previews and saving are unavailable; the saved PNG preview still works)'}${notFound(effective)}`,
+    `Effective Python: ${effective ?? '(none - only Normalize SVG and the normalization export route need a Python environment; previews, saving and the other exports work without one)'}${notFound(effective)}`,
   ];
   void vscode.window.showInformationMessage(lines.join('  '), { modal: true });
 }
 
 export function activate(context: vscode.ExtensionContext): void {
   const managedRoot = join(context.globalStorageUri.fsPath, 'managed-env');
-  const provider = new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri, context.extensionPath, managedRoot);
+  // The TypeScript Core runtime (Issue #58): host fonts are loaded
+  // once for the activation, and the resvg wasm is located before
+  // any render - the packaged copy under media/resvg in a VSIX, or
+  // the ts-core package's own copy in a source checkout.
+  const wasmCandidates = [
+    join(context.extensionPath, 'media', 'resvg', 'index_bg.wasm'),
+    join(context.extensionPath, '..', 'ts-core', 'node_modules', '@resvg', 'resvg-wasm', 'index_bg.wasm'),
+  ];
+  const tsRuntime = createTsCoreRuntime({
+    fonts: loadHostFonts(),
+    wasmPath: wasmCandidates.find((candidate) => existsSync(candidate)),
+  });
+  const provider = new VectorPngEditorProvider(context.extensionUri, managedRoot, tsRuntime);
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       webviewOptions: { retainContextWhenHidden: true },

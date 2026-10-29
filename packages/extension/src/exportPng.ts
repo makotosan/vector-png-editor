@@ -6,18 +6,20 @@ import { ExportCoreError, type ProfileValidation } from './export.ts';
 // without its embedded source chunk, for consumers that just want the
 // picture. Framework-free so the flow can be unit-tested with fakes.
 //
-// The raster always comes from the Python Core - TS never renders.
 // The route follows the source, exactly like the vector-png export:
-// a source that passes `validate --profile safe-svg-v1` renders
-// through the Core `build` command; a source that fails the gate
-// renders through the normalization `convert` route, and the result
-// says so, so the user knows the picture came from the normalized
-// form. If the chosen route fails, the other route is tried once;
-// only when both fail is an error reported (the primary route's -
-// the one the validation dictated). Whichever route produced it, the
-// built vector-png is stripped of exactly its one source chunk here
-// in TS, and only the stripped bytes are ever written. A failure at
-// any step writes nothing, and the open document is never touched.
+// a source that passes the safe-svg-v1 profile gate renders through
+// the build route; a source that fails the gate renders through the
+// normalization `convert` route, and the result says so, so the user
+// knows the picture came from the normalized form. Since Issue #58
+// the gate and the build route run in-process on the TypeScript
+// Core; `convert` still runs the Python Core (its port is Phase 2,
+// Issue #59). If the chosen route fails, the other route is tried
+// once; only when both fail is an error reported (the primary
+// route's - the one the validation dictated). Whichever route
+// produced it, the built vector-png is stripped of exactly its one
+// source chunk here, and only the stripped bytes are ever written.
+// A failure at any step writes nothing, and the open document is
+// never touched.
 
 export type PlainPngRenderOutcome =
   | { ok: true; png: Uint8Array; warnings: string[] }

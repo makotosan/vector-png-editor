@@ -1,26 +1,35 @@
-// Production export dependencies (Issue #47).
+// Production export dependencies (Issue #47; TS Core switch in
+// Issue #58).
 //
-// `build` reuses the bridge protocol-1 runner exactly like the save
-// path (coreSave.ts). `validate --profile` and `convert` cannot be
-// expressed over that transport - the protocol accepts neither a
-// profile gate nor a normalization report path - so they run through
-// the Core's versioned JSON CLI with a bounded, shell-free spawn that
-// mirrors the bridge's discipline (output caps, timeout, process-tree
-// kill, envelope validation). No Python Core changes were needed.
+// `validate --profile` and `build` now run in-process through the
+// TypeScript Core (packages/ts-core): the profile gate is
+// checkProfile with strict structure - exactly what the Core CLI's
+// `validate --profile safe-svg-v1` computed - and build is the
+// shared tsCore build/publish path. Neither needs a Python
+// environment any more.
+//
+// `convert` cannot switch yet: it is the normalization route, whose
+// port is Phase 2 (Issue #59). It still runs through the Core's
+// versioned JSON CLI with a bounded, shell-free spawn that mirrors
+// the bridge's discipline (output caps, timeout, process-tree kill,
+// envelope validation) - as does `normalize` in coreNormalize.ts,
+// which shares runCoreCli from this module.
 import { spawn, execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { access, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runCore, BridgeError } from '../../bridge/src/core.ts';
+import { TsCoreError } from '../../ts-core/src/errors.ts';
+import { checkProfile } from '../../ts-core/src/validate.ts';
 import type { BuildOutcome } from './save.ts';
 import {
   ExportCoreError, ExportUnavailableError,
-  type ConvertOutcome, type ProfileDiagnostic, type ProfileValidation,
+  type ConvertOutcome, type ProfileValidation,
 } from './export.ts';
 import type { ExportPngDeps, PlainPngRenderOutcome } from './exportPng.ts';
+import { buildToFile, buildVectorPngBytes, type TsCoreRuntime } from './tsCore.ts';
 
-const PYTHON_HINT = 'Export needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed. Nothing was written.';
+const PYTHON_HINT = 'Export via normalization needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed. Nothing was written.';
 
 type CliEnvelope = {
   protocol: 1;
@@ -93,23 +102,6 @@ export function runCoreCli(python: string, args: string[]): Promise<CliEnvelope>
   });
 }
 
-function parseDiagnostics(details: Record<string, unknown> | undefined): ProfileDiagnostic[] {
-  const list = details?.diagnostics;
-  if (!Array.isArray(list)) return [];
-  const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-  const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
-  return list.filter((d): d is Record<string, unknown> => typeof d === 'object' && d !== null).map((d) => ({
-    severity: text(d.severity) ?? 'error',
-    code: text(d.code) ?? 'unknown',
-    element: text(d.element),
-    attribute: text(d.attribute),
-    line: num(d.line),
-    column: num(d.column),
-    message: text(d.message) ?? 'Profile diagnostic',
-    suggestion: text(d.suggestion),
-  }));
-}
-
 // Human-readable warnings from a conversion report: every recorded
 // accessibility loss, plus any report warning that is not the generic
 // pointer at those losses.
@@ -161,47 +153,36 @@ export type CoreExportDeps = {
   removeFile: (path: string) => Promise<void>;
 };
 
-export function createCoreExportDeps(pythonPath: string | undefined): CoreExportDeps {
+export function createCoreExportDeps(pythonPath: string | undefined, runtime: TsCoreRuntime): CoreExportDeps {
   const requirePython = (): string => {
     const python = pythonPath?.trim();
     if (!python) throw new ExportUnavailableError(PYTHON_HINT);
     return python;
   };
   return {
-    async validateProfile(source, width, height): Promise<ProfileValidation> {
-      const python = requirePython();
-      return withTempDir(async (dir) => {
-        const input = join(dir, 'input.svg');
-        await writeFile(input, source, 'utf8');
-        const envelope = await runCoreCli(python, [
-          '--request-id', `export-validate-${Date.now()}-${++sequence}`,
-          'validate', input, '--profile', 'safe-svg-v1',
-          '--width', String(width), '--height', String(height),
-        ]);
-        if (envelope.ok) return { valid: true };
-        if (envelope.error?.code === 'unsupported-profile')
-          return { valid: false, diagnostics: parseDiagnostics(envelope.error.details) };
-        throw new ExportCoreError(envelope.error?.code ?? 'unknown', envelope.error?.message ?? 'The Core rejected the source');
-      });
-    },
-    async build(request): Promise<BuildOutcome> {
-      const python = requirePython();
-      let response;
+    // The profile gate, in-process. Width/height never participated
+    // in the CLI's --profile verdict either (they only fed the
+    // separate validate_render path), so they are accepted for the
+    // deps contract and unused. An XML-level failure is a Core
+    // refusal, thrown as ExportCoreError exactly as the CLI's
+    // non-profile error was.
+    async validateProfile(source, _width, _height): Promise<ProfileValidation> {
+      let diagnostics;
       try {
-        response = await runCore(python, {
-          protocol: 1, command: 'build', request_id: `export-${Date.now()}-${++sequence}`,
-          source_base64: Buffer.from(request.source, 'utf8').toString('base64'),
-          output: request.output, width: request.width, height: request.height,
-          overwrite: request.expectedSha256 !== undefined, expected_sha256: request.expectedSha256,
-        });
+        diagnostics = checkProfile(Buffer.from(source, 'utf8'), { strictStructure: true });
       } catch (error) {
-        if (error instanceof BridgeError) return { ok: false, code: error.code, message: error.message };
+        if (error instanceof TsCoreError) throw new ExportCoreError(error.code, error.message);
         throw error;
       }
-      if (!response.response.ok)
-        return { ok: false, code: response.response.error?.code ?? 'unknown', message: response.response.error?.message ?? 'The Core rejected the export' };
-      const backup = response.response.result?.backup;
-      return { ok: true, backup: typeof backup === 'string' ? backup : null };
+      if (diagnostics.length === 0) return { valid: true };
+      return { valid: false, diagnostics };
+    },
+    async build(request): Promise<BuildOutcome> {
+      return buildToFile(runtime, {
+        sourceBase64: Buffer.from(request.source, 'utf8').toString('base64'),
+        output: request.output, width: request.width, height: request.height,
+        overwrite: request.expectedSha256 !== undefined, expectedSha256: request.expectedSha256,
+      });
     },
     async convert(request): Promise<ConvertOutcome> {
       const python = requirePython();
@@ -241,34 +222,35 @@ export function createCoreExportDeps(pythonPath: string | undefined): CoreExport
 }
 
 // Production rendering dependencies for the plain-PNG export
-// (Issue #45): the same Core validate/build/convert operations as
-// the vector-png export, but rendering into a private temp file and
-// resolving its bytes - the stripped raster is the only thing the
-// caller ever writes, and only where the user chose. The dialog and
-// the final write are the host's (see ExportPngDeps).
+// (Issue #45): the same validate/build/convert routes as the
+// vector-png export. The build route now runs entirely in-process
+// and resolves the built bytes from memory - no temp file. The
+// convert route still produces a temp vector-png through the
+// Python Core and resolves its bytes. Either way, the stripped
+// raster is the only thing the caller ever writes, and only where
+// the user chose; the dialog and the final write are the host's
+// (see ExportPngDeps).
 export type CorePlainPngDeps = Pick<ExportPngDeps, 'validateProfile' | 'renderViaBuild' | 'renderViaConvert'>;
 
-export function createCorePlainPngDeps(pythonPath: string | undefined): CorePlainPngDeps {
-  const base = createCoreExportDeps(pythonPath);
-  const readRendered = async (outcome: { ok: true } | { ok: false; code: string; message: string }, output: string, warnings: string[]): Promise<PlainPngRenderOutcome> => {
-    if (!outcome.ok) return outcome;
-    return { ok: true, png: await readFile(output), warnings };
-  };
+export function createCorePlainPngDeps(pythonPath: string | undefined, runtime: TsCoreRuntime): CorePlainPngDeps {
+  const base = createCoreExportDeps(pythonPath, runtime);
   return {
     validateProfile: base.validateProfile,
     async renderViaBuild(source, width, height): Promise<PlainPngRenderOutcome> {
-      return withTempDir(async (dir) => {
-        const output = join(dir, 'render.png');
-        const outcome = await base.build({ source, output, width, height });
-        return readRendered(outcome, output, []);
-      });
+      try {
+        const png = await buildVectorPngBytes(runtime, Buffer.from(source, 'utf8'), width, height);
+        return { ok: true, png, warnings: [] };
+      } catch (error) {
+        if (error instanceof TsCoreError) return { ok: false, code: error.code, message: error.message };
+        return { ok: false, code: 'io-error', message: error instanceof Error ? error.message : String(error) };
+      }
     },
     async renderViaConvert(source): Promise<PlainPngRenderOutcome> {
       return withTempDir(async (dir) => {
         const output = join(dir, 'render.png');
         const outcome = await base.convert({ source, output });
         if (!outcome.ok) return outcome;
-        return readRendered({ ok: true }, output, outcome.warnings);
+        return { ok: true, png: await readFile(output), warnings: outcome.warnings };
       });
     },
   };

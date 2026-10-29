@@ -1,91 +1,69 @@
-// Production preview renderer: the edited source is validated and
-// rendered only by the Python Core, through the bridge package (P1-04).
-// Validation runs on the bridge's LatestValidation lane, so a superseded
-// source cancels its predecessor; rendering then uses the Core `build`
-// command into a private preview file whose raster is the Core's own
-// rendering of the edited source. Nothing is rendered before validation
-// succeeds, and the built file is never the user's document.
-import { randomUUID } from 'node:crypto';
-import { mkdir, readdir, stat, unlink } from 'node:fs/promises';
-import { join } from 'node:path';
-import { LatestValidation, runCore, BridgeError } from '../../bridge/src/core.ts';
-import { PreviewInvalidError, PreviewStaleError, PreviewUnavailableError, type PreviewRenderer } from './preview.ts';
+// Production preview renderer (Issue #58): the edited source is
+// validated and rendered in-process by the TypeScript Core
+// (packages/ts-core) and resolved as a data URI, which the host
+// posts straight to the webview. Nothing is rendered before
+// validation succeeds.
+//
+// This replaces the Python bridge path (validate on the bridge's
+// LatestValidation lane, then `build` into a private preview
+// file). The temp-file machinery that path needed - exclusive
+// publish names, the per-instance token, the hourly sweep of the
+// persistent previews directory - existed only because the Core
+// published files, and is gone with it. Supersession is a local
+// generation counter: validation is synchronous, and a render that
+// finishes after a newer source arrived is reported stale, exactly
+// as the cancelled bridge lane reported it; the PreviewController
+// generation check remains the second line of defense.
+import { TsCoreError } from '../../ts-core/src/errors.ts';
+import { validateSource } from '../../ts-core/src/validate.ts';
+import { renderSvgToPng } from '../../ts-core/src/render.ts';
+import {
+  PreviewInvalidError, PreviewStaleError, PreviewUnavailableError, type PreviewRenderer,
+} from './preview.ts';
+import { sourceTextForRender, type TsCoreRuntime } from './tsCore.ts';
 
-export type CorePreviewOptions = {
-  pythonPath: string | undefined;
-  previewDir: string;
+export interface TsPreviewOptions {
+  runtime: TsCoreRuntime;
   width: number;
   height: number;
-  documentKey: string;
-};
+}
 
-export function createCorePreviewRenderer(options: CorePreviewOptions): PreviewRenderer {
-  const lane = new LatestValidation();
-  let sequence = 0;
-  // The Core publishes its build output exclusively (an existing
-  // output is refused), and the previews directory persists across
-  // sessions, so the output name must be unique per renderer
-  // instance: a bare sequence restarts at 1 for every reopened
-  // editor and collides with the previous session's leftover file,
-  // which made every edited preview fail with "Output already
-  // exists" (user report, 2026-10-29).
-  const instance = randomUUID().replaceAll('-', '').slice(0, 12);
-  let swept = false;
-  const sweepStalePreviews = async (): Promise<void> => {
-    // Best effort, once per instance: drop this document's preview
-    // files left by earlier instances once they are an hour old, so
-    // the persistent directory does not grow without bound. Fresh
-    // files are kept - another live panel may be about to read the
-    // render it just produced (the host reads it into a data URI;
-    // after that read the file is never needed again).
+export function createCorePreviewRenderer(options: TsPreviewOptions): PreviewRenderer {
+  let latest = 0;
+  return async (source: string, _revision: number): Promise<string> => {
+    const generation = ++latest;
     try {
-      const prefix = `preview-${options.documentKey}-`;
-      const cutoff = Date.now() - 60 * 60 * 1000;
-      for (const name of await readdir(options.previewDir)) {
-        if (!name.startsWith(prefix) || !name.endsWith('.png')) continue;
-        const path = join(options.previewDir, name);
-        try {
-          if ((await stat(path)).mtimeMs < cutoff) await unlink(path);
-        } catch { /* a vanished or busy file is fine */ }
-      }
-    } catch { /* the directory may not exist yet */ }
-  };
-  return async (source: string, revision: number): Promise<string> => {
-    const python = options.pythonPath?.trim();
-    if (!python)
-      throw new PreviewUnavailableError('Edited preview needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed.');
-    const sourceBase64 = Buffer.from(source, 'utf8').toString('base64');
-    const requestId = `preview-${options.documentKey}-${revision}`;
-    let validation;
-    try {
-      validation = await lane.run(python, {
-        protocol: 1, command: 'validate', request_id: requestId,
-        source_base64: sourceBase64, width: options.width, height: options.height,
-      });
+      validateSource(Buffer.from(source, 'utf8'));
     } catch (error) {
-      if (error instanceof BridgeError && error.code === 'cancelled') throw new PreviewStaleError('superseded');
+      if (error instanceof TsCoreError) throw new PreviewInvalidError(error.message);
       throw new PreviewUnavailableError(error instanceof Error ? error.message : String(error));
     }
-    if (validation === undefined) throw new PreviewStaleError('superseded');
-    if (!validation.response.ok)
-      throw new PreviewInvalidError(validation.response.error?.message ?? 'The Core rejected the source');
-    await mkdir(options.previewDir, { recursive: true });
-    if (!swept) {
-      swept = true;
-      await sweepStalePreviews();
-    }
-    const output = join(options.previewDir, `preview-${options.documentKey}-${instance}-${++sequence}.png`);
-    let built;
+    let fonts;
     try {
-      built = await runCore(python, {
-        protocol: 1, command: 'build', request_id: `${requestId}-build`,
-        source_base64: sourceBase64, output, width: options.width, height: options.height, overwrite: false,
+      fonts = await options.runtime.fonts;
+    } catch (error) {
+      throw new PreviewUnavailableError(
+        `Host fonts could not be loaded: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    if (generation !== latest) throw new PreviewStaleError('superseded');
+    let rendered;
+    try {
+      rendered = await renderSvgToPng(sourceTextForRender(Buffer.from(source, 'utf8')), {
+        width: options.width,
+        height: options.height,
+        fonts: fonts.fonts,
+        defaultFontFamily: fonts.defaultFamily,
+        sansSerifFamily: fonts.defaultFamily,
       });
     } catch (error) {
+      // The source validated; a render refusal (viewport caps,
+      // external-reference scan, engine failure) is a property of
+      // the source at this viewport, reported like the Core build
+      // refusal was. Anything else is an environment failure.
+      if (error instanceof TsCoreError) throw new PreviewInvalidError(error.message);
       throw new PreviewUnavailableError(error instanceof Error ? error.message : String(error));
     }
-    if (!built.response.ok)
-      throw new PreviewInvalidError(built.response.error?.message ?? 'The Core could not render the source');
-    return output;
+    if (generation !== latest) throw new PreviewStaleError('superseded');
+    return `data:image/png;base64,${Buffer.from(rendered.png).toString('base64')}`;
   };
 }
