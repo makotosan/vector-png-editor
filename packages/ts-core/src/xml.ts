@@ -1,8 +1,9 @@
-// Bounded UTF-8 XML parsing for SVG sources, mirroring the Python
-// Core's svg.parse_source (packages/core/src/vector_png_editor/
-// svg.py) and the tree views its consumers build from it.
+// Bounded UTF-8 XML parsing for SVG sources, mirroring the retired
+// Python Core's svg.parse_source (originally
+// vector_png_editor/svg.py) and the tree views its consumers build
+// from it.
 //
-// The Core parses twice: an expat pass enforces the hard limits and
+// The original parses twice: an expat pass enforces the hard limits and
 // prohibitions (no DTD, no entity declarations, no external
 // entities, no processing instructions; at most 5,000 elements,
 // depth 32, attribute values of at most 100,000 code points; an

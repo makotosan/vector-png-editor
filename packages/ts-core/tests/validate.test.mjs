@@ -242,7 +242,7 @@ test('parseSource returns the namespace-expanded tree', () => {
 // expected output validates clean.
 test('nameplate fixture pair: input rejected, expected accepted', async () => {
   const fixtures = fileURLToPath(
-    new URL('../../core/tests/fixtures/normalization/', import.meta.url),
+    new URL('../fixtures/normalization/', import.meta.url),
   );
   const input = await readFile(join(fixtures, 'nameplate.input.svg'));
   const expected = await readFile(join(fixtures, 'nameplate.expected.svg'));

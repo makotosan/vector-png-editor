@@ -1,7 +1,7 @@
-// safe-svg-v1 profile data mirrored from the Python Core
-// (packages/core/src/vector_png_editor/_backend.py: TAGS / ATTRS).
-// A unit test parses the Core source and fails if these lists drift.
-// The Core remains the authoritative validator; this data drives editor
+// safe-svg-v1 profile data mirrored from the TypeScript Core
+// (packages/ts-core/src/validate.ts: TAGS / ATTRS).
+// A unit test imports the Core source and fails if these lists drift.
+// The TS Core remains the authoritative validator; this data drives editor
 // completion and advisory diagnostics only.
 export const SAFE_SVG_ELEMENTS: readonly string[] = [
   'svg', 'g', 'defs', 'title', 'desc', 'path', 'rect', 'circle', 'ellipse',

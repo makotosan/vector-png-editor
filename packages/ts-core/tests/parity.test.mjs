@@ -77,7 +77,7 @@ async function buildSvgCases() {
 
   const catalog = JSON.parse(
     await readFile(
-      join(repoRoot, 'packages/core/tests/fixtures/vectors.json'),
+      join(repoRoot, 'packages/ts-core/fixtures/vectors.json'),
       'utf8',
     ),
   ).fixtures;
@@ -94,7 +94,7 @@ async function buildSvgCases() {
     }
   }
 
-  const normDir = join(repoRoot, 'packages/core/tests/fixtures/normalization');
+  const normDir = join(repoRoot, 'packages/ts-core/fixtures/normalization');
   const normCases = JSON.parse(await readFile(join(normDir, 'cases.json'), 'utf8'));
   for (const c of normCases) add(`norm:${c.id}`, enc(c.input));
   add('nameplate:input', await readFile(join(normDir, 'nameplate.input.svg')));
@@ -228,7 +228,7 @@ async function buildPngCases() {
 
   const catalog = JSON.parse(
     await readFile(
-      join(repoRoot, 'packages/core/tests/fixtures/vectors.json'),
+      join(repoRoot, 'packages/ts-core/fixtures/vectors.json'),
       'utf8',
     ),
   ).fixtures;
@@ -537,7 +537,7 @@ async function buildNormalizeCases() {
   const cases = new Map();
   const add = (id, source) => cases.set(id, source);
 
-  const normDir = join(repoRoot, 'packages/core/tests/fixtures/normalization');
+  const normDir = join(repoRoot, 'packages/ts-core/fixtures/normalization');
   const normCases = JSON.parse(await readFile(join(normDir, 'cases.json'), 'utf8'));
   for (const c of normCases) add(`norm:${c.id}`, enc(c.input));
   add('nameplate:input', await readFile(join(normDir, 'nameplate.input.svg')));

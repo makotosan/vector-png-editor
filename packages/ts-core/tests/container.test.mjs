@@ -1,9 +1,11 @@
 // PNG container tests for the TS port. The pinned catalog comes
-// from the Core's own fixtures (packages/core/tests/fixtures/
-// vectors.json); structural cases are transcribed from the Core's
-// test_core.py / test_container_audit.py recipes; the exhaustive
-// equality check against the running Python Core is
-// tests/parity.test.mjs.
+// from the vendored fixtures (packages/ts-core/fixtures/
+// vectors.json, relocated from the retired Python Core's test
+// suite); structural cases are transcribed from the Core's
+// test_core.py / test_container_audit.py recipes; the baked
+// expectations below are the standing coverage (the former live
+// cross-check against the running Python Core was removed with
+// the Core's retirement - see the ts-core README).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -51,7 +53,7 @@ const parseCode = (data) => code(() => parseDocument(data));
 // --- The pinned container catalog (vectors.json) ---
 
 const catalogPath = fileURLToPath(
-  new URL('../../core/tests/fixtures/vectors.json', import.meta.url),
+  new URL('../fixtures/vectors.json', import.meta.url),
 );
 const catalog = JSON.parse(await readFile(catalogPath, 'utf8')).fixtures;
 

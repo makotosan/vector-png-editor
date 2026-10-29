@@ -1,9 +1,12 @@
-// Normalizer tests for the TypeScript port of the Python Core's
-// svg-normalization-v1 normalizer (packages/core .../normalize.py).
-// Expectations are baked from the Python implementation and its own
-// test suite (packages/core/tests/test_normalize.py) plus the
-// vendored spec fixtures; the live verdict/byte/report cross-check
-// against the running Python Core lives in parity.test.mjs.
+// Normalizer tests for the TypeScript port of the retired Python
+// Core's svg-normalization-v1 normalizer (formerly
+// packages/core/src/vector_png_editor/normalize.py).
+// Expectations are baked from the Python implementation and its
+// own test suite (formerly packages/core/tests/test_normalize.py)
+// plus the vendored spec fixtures in ../fixtures/normalization/;
+// the live cross-check that originally verified them against the
+// running Python Core was removed with the Core's retirement
+// (see the ts-core README).
 //
 // The render gate in these tests runs on resvg (never Cairo): the
 // gate compares the before/after renders WITHIN one engine, which
@@ -28,7 +31,7 @@ import { decodePngRgba } from '../src/pngPixels.ts';
 import { loadSpikeFonts } from './test-fonts.mjs';
 
 const fixtures = fileURLToPath(
-  new URL('../../core/tests/fixtures/normalization/', import.meta.url),
+  new URL('../fixtures/normalization/', import.meta.url),
 );
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const corpusDir = join(dirname(repoRoot), 'user/files');
