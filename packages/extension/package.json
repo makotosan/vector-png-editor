@@ -28,7 +28,7 @@
     "check": "tsc -p .",
     "test": "node --test tests/*.test.mjs",
     "bundle:monaco": "node scripts/copy-monaco.mjs",
-    "vscode:prepublish": "node scripts/copy-monaco.mjs && node scripts/copy-schemas.mjs && node scripts/bundle-extension.mjs",
+    "vscode:prepublish": "node scripts/copy-monaco.mjs && node scripts/copy-schemas.mjs && node scripts/copy-resvg.mjs && node scripts/bundle-extension.mjs",
     "bundle:schemas": "node scripts/copy-schemas.mjs",
     "bundle:extension": "node scripts/bundle-extension.mjs"
   },
