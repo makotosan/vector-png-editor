@@ -173,45 +173,74 @@ by construction and are excluded from the cross-check's report
 comparison (the shared fields — fonts, background,
 resource_policy, comparison, tolerances, viewport — must agree).
 
-On the 48-case cross-check corpus the two gates' verdicts agree
-on 38 cases. The other 10 are cases the Python gate passes and
-the resvg gate reports as `render-mismatch` — every one traced to
-a renderer-semantics difference, not a transformation difference
-(the structure outputs are byte-identical in all 10):
+### The before-image accommodation (option A)
 
-- **CSS geometry properties (5 cases).** resvg ignores `rx`/`ry`
-  declared in CSS; materializing them as attributes — what the
-  transformation does — turns square corners round under resvg.
-  CairoSVG applies them in both forms. (Catalog
-  `rounded-diagram-arrows`; corpus `pld-timeline.svg`,
-  `eu-product-framework-timeline.svg`,
-  `residual-risk-reassessment-flow.svg`,
-  `safety-information-traceability.svg`. In `pld-timeline.svg`,
-  moving `rx` from CSS to attributes in the *original* alone
-  reproduces 912 of its 965 differing pixels.)
-- **Marker rasterization (3 cases).** resvg rasterizes a native
-  marker and the spec's expanded `<g>` clone with slightly
-  different antialiasing (edge deltas up to ~46/255 on the
-  iso7010 arrowheads; 4 pixels at a small rotated arrowhead's
-  tip). With marker rendering factored out of both sides, the
-  before/after renders are pixel-identical. (Corpus
-  `iso7010-global-alignment.svg`, `iso7010-update-cycle.svg`.)
-- **Markers on `stroke="none"` hosts (2 cases) — the Issue #59
-  decision.** resvg does not paint native markers on hosts whose
-  computed stroke is `none` (explicit or default); CairoSVG
-  paints them. The transformation mirrors Python exactly —
-  markers on such hosts are expanded to clone groups like any
-  other, and the clone IS painted by resvg — so the within-resvg
-  gate reports a mismatch where the Cairo gate passes. This is
-  recorded as a known, tested deviation (see
-  `tests/normalize.test.mjs`), **not** compensated for: changing
-  the output to suit one renderer would break byte parity with
-  the Python normalizer. Renderer-conformance records are
-  Issue #61's deferred scope.
+resvg cannot render every form an input may take, where
+CairoSVG can, in two construct classes:
 
-The divergences are tagged per case in
-`KNOWN_GATE_DIVERGENCES` in `tests/parity.test.mjs`, so a new
-disagreement fails the cross-check instead of passing silently.
+- **CSS geometry properties.** Measured on resvg 2.6.2
+  (attribute form vs stylesheet-rule form vs style-attribute
+  form, per element): EVERY SVG2 geometry property is ignored
+  in CSS — `x`, `y`, `width`, `height`, `rx`, `ry` on `rect`;
+  `cx`, `cy`, `r` on `circle`; `cx`, `cy`, `rx`, `ry` on
+  `ellipse` — the presentation attribute stands even when a
+  rule contradicts it, while paint properties in CSS are
+  honored. A raw before-image therefore shows square corners
+  where the materialized output (attributes) rounds them.
+- **Native markers.** resvg rasterizes a native marker and the
+  profile's expanded `<g>` clone with slightly different
+  antialiasing (edge deltas up to ~46/255 on the iso7010
+  arrowheads), and it does not paint native markers at all on
+  `stroke="none"` hosts, where CairoSVG paints them — so a raw
+  before-image differs from the clone-painting output wherever
+  a marker sits on such a host.
+
+With a raw before-image, the resvg gate refused 10 of the 48
+cross-check cases the Python gate passes — every one with
+byte-identical structure output, i.e. the transformation was
+provably render-preserving and only the before-image was
+unrenderable in this engine. By the user-approved
+accommodation (decision recorded 2026-10-29, option A), the
+gate's BEFORE image is rendered from an accommodated copy of
+the input (`gateInputText` in `src/normalize.ts`), built with
+exactly two accommodations and nothing else:
+
+1. For each element, each geometry property whose cascaded
+   winning value comes from CSS (a style rule or a style
+   attribute) is also set as the element's attribute, computed
+   by the transformation's own cascade. (Within the profile's
+   closed CSS subset only `rx`/`ry` can ever be cascaded — the
+   other geometry properties are rejected as unsupported CSS
+   before any gate runs — so those are the only properties
+   this fires on today; the measured set is recorded in full
+   because it is the engine fact.)
+2. Markers are expanded by the transformation's own section
+   3.1 code path (G2 curved-host tangents included), and
+   `marker-end` is consumed from the gate input's CSS as
+   well, so both sides render markers as the same expanded
+   clones and no native marker paints beside its clone.
+
+The transformation itself is unchanged — its output is never
+adjusted to suit one renderer — and the comparison is
+unchanged: the accommodated input and the normalized output
+are two different source forms and must render exactly equal,
+and a hand-broken output still fails the gate (the
+negative-control test). The narrowing is honest and bounded:
+for the two accommodated classes, the gate no longer
+independently proves that CSS-to-attribute materialization
+and marker expansion preserve rendering; that fidelity is
+covered by the structure cross-check against the Python Core
+(byte-identical outputs and reports on the whole corpus).
+Everything else — paint and all other CSS, which stays in CSS
+form in the before-image — is still compared across forms by
+the gate itself.
+
+Result: on the 48-case cross-check corpus the two gates'
+verdicts now agree on all 48 cases (structure and gate), and
+all nine corpus SVGs pass the TS normalization end to end.
+`KNOWN_GATE_DIVERGENCES` in `tests/parity.test.mjs` is empty;
+it remains as the enforcement mechanism, so a new disagreement
+fails the cross-check instead of passing silently.
 
 ## Tests
 
@@ -234,8 +263,12 @@ The normalizer suite (`tests/normalize.test.mjs`) runs without
 Python: the 27-case catalog's verdicts and codes, the nameplate
 golden output and report, the Python suite's cascade / CSS
 rejection / marker geometry / accessibility / resource-limit
-expectations baked in, the gated entry point on resvg, and the
-`stroke="none"` decision tests.
+expectations baked in, the gated entry point on resvg, the
+gate-accommodation tests (a positive case per construct class,
+the `gateInputText` shape test, a render-gate negative
+control), the `stroke="none"` decision tests, and — when the
+workspace corpus is present — an end-to-end gated run of all
+nine corpus SVGs.
 
 Note: `node_modules` includes the resvg wasm asset (~2.5 MB);
 the MPL-2.0 notice for resvg lands in THIRD_PARTY_NOTICES with
