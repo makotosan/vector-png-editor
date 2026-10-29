@@ -276,5 +276,6 @@ workspace corpus is present — an end-to-end gated run of all
 nine corpus SVGs.
 
 Note: `node_modules` includes the resvg wasm asset (~2.5 MB);
-the MPL-2.0 notice for resvg lands in THIRD_PARTY_NOTICES with
-the packaging work (Issue #60).
+resvg is MPL-2.0 and is listed, with the wasm note, in the
+repository-root `THIRD_PARTY_NOTICES.md` (a guard test in this
+suite checks the entry names the pinned version).

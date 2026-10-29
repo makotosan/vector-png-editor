@@ -1,58 +1,50 @@
 # Third-party notices and license inventory
 
 This inventory covers everything the product depends on or bundles:
-the Python runtime dependencies pinned in [requirements.lock](requirements.lock),
-the native Cairo library, the editor code bundled by the VS Code
-extension, and code adapted from upstream projects. License strings
-below were read from the installed distributions' package metadata
-during the P0-03 verification (clean venv, Python 3.12, 2026-10-28);
-`packages/core/tests/test_notices.py` guards that every lock pin
-appears here at its pinned version.
+the TypeScript Core's one runtime dependency, the components copied
+into the VS Code extension package, and code and fixtures adapted
+from upstream projects. A test in `packages/ts-core/tests/`
+(`notices.test.mjs`) guards that the resvg entry below names the
+version pinned in `packages/ts-core/package.json`.
 
-## Python runtime dependencies (pinned, not bundled with the Core wheel)
-
-| Package | Version | License | Role |
-| --- | --- | --- | --- |
-| vector-png-editor-core | 0.1.0.dev3 | MIT | This product's Core (see provenance below) |
-| Pillow | 13.0.0 | MIT-CMU | PNG raster decode/encode |
-| CairoSVG | 2.9.1 | LGPL-3.0-or-later | SVG rendering to the preview raster |
-| defusedxml | 0.7.1 | PSFL (Python Software Foundation License) | Hardened XML parsing |
-| cairocffi | 1.7.1 | BSD (3-clause, per package classifier) | Python bindings for native Cairo |
-| cffi | 2.1.1 | MIT-0 | FFI used by cairocffi |
-| cssselect2 | 0.10.1 | BSD (3-clause, per package classifier) | CSS selection for CairoSVG |
-| tinycss2 | 1.5.1 | BSD (3-clause, per package classifier) | CSS parsing for CairoSVG |
-| pycparser | 3.12 | BSD-3-Clause | C parsing for cffi |
-| webencodings | 0.6.1 | BSD (3-clause, per package classifier) | Encoding tables for tinycss2 |
-
-The managed environment installs exactly these versions and rejects
-an environment whose installed versions differ (see docs/INSTALL.md).
-The lock is a version lock, not a hash lock for dependency wheels.
-
-## Native libraries (installed separately, never bundled)
-
-| Library | License | Notes |
-| --- | --- | --- |
-| Cairo (libcairo) | LGPL-2.1 / MPL-1.1 dual | System library loaded by cairocffi at render time. Verified locally with Cairo 1.18.0 on Linux. The product installs no native library; setup reports a missing Cairo as a health-check failure with platform guidance. |
-
-## Bundled by the VS Code extension
+## Bundled by the VS Code extension (ships inside the VSIX)
 
 | Component | Version | License | Notes |
 | --- | --- | --- | --- |
+| @resvg/resvg-wasm | 2.6.2 | MPL-2.0 | The SVG renderer of the TypeScript Core. The package is used unmodified; its WebAssembly binary (`index_bg.wasm`, ~2.48 MB) is copied into the extension at build time by `packages/extension/scripts/copy-resvg.mjs` (to `media/resvg/`) and loaded by the bundled host code. MPL-2.0 is a file-level copyleft: the resvg source is available from the resvg project (https://github.com/RazrFalcon/resvg) and the npm package `@resvg/resvg-wasm`. |
 | Monaco Editor | 0.57.0 | MIT | Copied from the npm package into the extension at build time by `packages/extension/scripts/copy-monaco.mjs`. Copyright (c) Microsoft Corporation. |
 
 No Python interpreter, font, or native library is bundled by the
-extension.
+extension, and none is required at runtime: the Python Core, its
+runtime dependencies (Pillow, CairoSVG, defusedxml and their
+transitives) and the native Cairo library were retired with the
+TypeScript migration (Phase 3, Issue #60) and are no longer part
+of the product.
 
-## Upstream provenance (adapted code)
+## Upstream provenance (adapted code and vendored fixtures)
 
-The safe-svg-v1 allowlist and rendering adapter in the Core are
-adapted from makotosan/vector-png (MIT), and the conformance vectors
-come from makotosan/vector-png-spec (MIT). Exact commits, blob hashes
-and the preserved MIT texts are recorded in
-[packages/core/THIRD_PARTY_NOTICES.md](packages/core/THIRD_PARTY_NOTICES.md)
-and [packages/core/LICENSE](packages/core/LICENSE), which ship inside
-the Core wheel. This product's own code is MIT (see the package
-LICENSE); the MIT license of this product does not replace the terms
-of the dependencies above - in particular CairoSVG (LGPL-3.0-or-later)
-and native Cairo (LGPL-2.1/MPL-1.1) keep their own obligations when
-the components are redistributed together.
+The safe-svg-v1 allowlist and rendering adapter are adapted from
+makotosan/vector-png, `vector_png.py` at commit
+d00dd8800cdf6978ebf1d5c6ae61042c7fbadbc2 (blob
+4828b4bb60a97704161bf71e70eaeff8fc97ef49). Copyright (c) 2026
+makotosan and vector-png contributors, MIT; the full MIT text is
+preserved in [LICENSE](LICENSE). The adaptation was first made in
+the retired Python Core (parser-aware XML handling in place of
+lexical inspection) and then ported behaviour-for-behaviour to
+TypeScript in `packages/ts-core`; the original upstream code is
+unchanged.
+
+`packages/ts-core/fixtures/vectors.json` is copied without content
+changes from makotosan/vector-png-spec at
+8238ebdaa136f448affa53133b99ee5afde5765a, `fixtures/vectors.json`.
+Copyright (c) 2026 makotosan, MIT. These 21 cases are finite
+evidence, not certification. The normalization fixtures in
+`packages/ts-core/fixtures/normalization/` are vendored from the
+same specification repository at the pinned revision in
+[spec-reference.json](spec-reference.json); see the
+`PROVENANCE.md` beside them.
+
+This product's own code is MIT (see [LICENSE](LICENSE)); that
+license does not replace the terms of the components above - in
+particular resvg (MPL-2.0) keeps its own obligations when the
+components are redistributed together.
