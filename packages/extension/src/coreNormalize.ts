@@ -1,106 +1,73 @@
-// Production normalization dependency (Issue #47 follow-up).
+// Production normalization dependency (Issue #47 follow-up; TS Core
+// switch in Issue #59).
 //
-// The Core `normalize` command takes file paths and a report path,
-// which the protocol-1 transport cannot express over a source buffer,
-// so - like `validate --profile` and `convert` in coreExport.ts - it
-// runs through the Core's versioned JSON CLI under the same bounded,
-// shell-free spawn. The current source (unsaved edits included) is
-// written to a private temp file; the normalized output and the
-// conversion report are read back from temp locations only. Nothing
-// outside the temp directory is written by this module.
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { ExportUnavailableError } from './export.ts';
-import { runCoreCli, warningsFromReport } from './coreExport.ts';
+// Normalization now runs in-process through the TypeScript Core
+// (packages/ts-core): normalizeDocument is the port of the Python
+// Core's gated entry point, with the before/after render gate on
+// resvg. The current source (unsaved edits included) is normalized
+// in memory and the conversion report is read from the result -
+// nothing is written anywhere by this module; the caller applies
+// the returned text as one undoable edit.
+import {
+  NormalizeRejection, normalizeDocument,
+  type ConversionReport,
+} from '../../ts-core/src/normalize.ts';
+import { warningsFromReport } from './coreExport.ts';
 import type { NormalizeCoreOutcome, NormalizeSummary } from './normalize.ts';
+import type { TsCoreRuntime } from './tsCore.ts';
 
-const PYTHON_HINT = 'Normalize needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed. Nothing was changed.';
-
-type Report = Record<string, unknown>;
-
-function record(value: unknown): Report | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value as Report : undefined;
-}
-
-function count(report: Report | undefined, key: string): number {
-  const changes = record(report?.changes);
-  const value = changes?.[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
-}
-
-export function summaryFromReport(report: Report | undefined): NormalizeSummary {
+export function summaryFromReport(report: ConversionReport | undefined): NormalizeSummary {
   const migrations: string[] = [];
-  const accessibility = report?.accessibility;
-  if (Array.isArray(accessibility)) {
-    for (const entry of accessibility) {
-      const item = record(entry);
-      if (item && typeof item.attribute === 'string' && typeof item.target === 'string')
-        migrations.push(`${item.attribute} -> ${item.target}`);
+  if (report) {
+    for (const item of report.accessibility) {
+      if (typeof item.target === 'string') migrations.push(`${item.attribute} -> ${item.target}`);
     }
   }
+  const changes = report?.changes;
   return {
-    appliedDeclarations: count(report, 'applied_declarations'),
-    expandedMarkers: count(report, 'expanded_markers'),
-    styleElements: count(report, 'style_elements'),
-    classAttributes: count(report, 'class_attributes'),
-    inlineStyles: count(report, 'inline_styles'),
+    appliedDeclarations: changes?.applied_declarations ?? 0,
+    expandedMarkers: changes?.expanded_markers ?? 0,
+    styleElements: changes?.style_elements ?? 0,
+    classAttributes: changes?.class_attributes ?? 0,
+    inlineStyles: changes?.inline_styles ?? 0,
     migrations,
     losses: warningsFromReport(report),
   };
 }
 
-export function errorsFromReport(report: Report | undefined): string[] {
-  const errors = report?.errors;
-  if (!Array.isArray(errors)) return [];
-  const lines: string[] = [];
-  for (const entry of errors) {
-    const item = record(entry);
-    if (!item) continue;
-    const code = typeof item.code === 'string' ? item.code : 'unknown';
-    const stage = typeof item.stage === 'string' ? ` (${item.stage})` : '';
-    const explanation = typeof item.explanation === 'string' ? item.explanation : 'Normalization failed';
-    lines.push(`${code}${stage}: ${explanation}`);
-  }
-  return lines;
+export function errorsFromReport(report: ConversionReport | undefined): string[] {
+  if (!report) return [];
+  return report.errors.map((item) => {
+    const stage = item.stage ? ` (${item.stage})` : '';
+    return `${item.code}${stage}: ${item.explanation}`;
+  });
 }
 
-let sequence = 0;
-
-export function createCoreNormalizeDeps(pythonPath: string | undefined): {
+export function createCoreNormalizeDeps(runtime: TsCoreRuntime): {
   normalize: (source: string) => Promise<NormalizeCoreOutcome>;
 } {
   return {
     async normalize(source: string): Promise<NormalizeCoreOutcome> {
-      const python = pythonPath?.trim();
-      if (!python) throw new ExportUnavailableError(PYTHON_HINT);
-      const dir = await mkdtemp(join(tmpdir(), 'vpe-normalize-'));
+      const { fonts, defaultFamily } = await runtime.fonts;
       try {
-        const input = join(dir, 'input.svg');
-        const output = join(dir, 'output.svg');
-        const reportPath = join(dir, 'report.json');
-        await writeFile(input, source, 'utf8');
-        const envelope = await runCoreCli(python, [
-          '--request-id', `normalize-${Date.now()}-${++sequence}`,
-          'normalize', input, output, '--report', reportPath,
-        ]);
-        if (!envelope.ok) {
-          const details = record(envelope.error?.details);
+        const { output, report } = await normalizeDocument(Buffer.from(source, 'utf8'), {
+          fonts, defaultFontFamily: defaultFamily, sansSerifFamily: defaultFamily,
+        });
+        return {
+          ok: true,
+          output: new TextDecoder('utf-8').decode(output),
+          summary: summaryFromReport(report),
+        };
+      } catch (error) {
+        if (error instanceof NormalizeRejection) {
           return {
             ok: false,
-            code: envelope.error?.code ?? 'unknown',
-            message: envelope.error?.message ?? 'The Core rejected the source',
-            errors: errorsFromReport(record(details?.report)),
+            code: error.code,
+            message: error.message,
+            errors: errorsFromReport(error.report),
           };
         }
-        const text = await readFile(output, 'utf8');
-        let report = record(envelope.result);
-        if (!report) {
-          try { report = record(JSON.parse(await readFile(reportPath, 'utf8'))); } catch { report = undefined; }
-        }
-        return { ok: true, output: text, summary: summaryFromReport(report) };
-      } finally {
-        await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+        throw error;
       }
     },
   };

@@ -323,10 +323,22 @@ UTF-8 write guarded by the same SHA-256 revision agreement the Core
 enforces for PNG saves (`src/svgSave.ts`) instead of a Core rebuild.
 Display is never blocked by safe-svg-v1 validation: diagnostics stay
 advisory in the source pane, and the edited preview renders the
-source as-is from a private file through the webview `<img>`
-(`src/svgPreview.ts`), because the Core preview path validates
-against the profile before rendering and cannot show a general SVG.
-No SVG markup enters the DOM and the restrictive CSP is unchanged.
+source as-is through the webview `<img>`, because the Core preview
+path validates against the profile before rendering and cannot
+show a general SVG. No SVG markup enters the DOM.
+
+The preview transport changed after the Issue #18 live check
+(2026-10-29): temporary preview files served as webview resources
+are refused with a 401 by the webview resource server in a real VS
+Code host, so edited previews no longer travel as files at all. A
+plain SVG's edited preview is rendered inside the webview from the
+model text as a blob URL (mirroring the host pipeline's 300 ms
+debounce and its no-<svg>-root invalid outcome), and a
+vector-png's Core-rendered PNG is posted to the webview as a data
+URI; the CSP's img-src therefore also allows `data:` and `blob:`.
+The saved view still shows the actual file through a webview
+resource, which loads normally. The former temporary-file SVG
+renderer (`src/svgPreview.ts`) is removed.
 
 The new command `Vector PNG: Export as Vector PNG`
 (`vectorPng.exportAsVectorPng`; command palette, explorer context for
@@ -411,6 +423,17 @@ and the failure is shown with its code and message, with the
 report's structured errors available in a diagnostics document -
 the same presentation discipline as the export validation failure.
 
+Both Issue #47 commands are also Preview-panel buttons (user
+request, 2026-10-29): for an SVG document, a second action row
+under Copy / Export / Export PNG shows **Normalize SVG** and
+**Export as Vector PNG**. The buttons post the same no-field
+webview messages as the other panel actions and the host runs the
+existing command implementations on the panel's own document, so
+button and command can never diverge. The row stays hidden for
+vector-png documents. The extension README gains a "buttons by
+document kind" table recording how every control behaves for
+vector-png, SVG and plain-PNG (view-only) documents.
+
 Verification: the suite passes 111 tests with 0 failures and 12
 skips by default (the two new real-Core tests gate on
 VECTOR_PNG_TEST_PYTHON like the existing integration tests), and
@@ -431,13 +454,17 @@ compact toolbar with **Save** and **Format** buttons and the document
 meta line, over the Monaco editor with its existing diagnostics,
 completion and edit sync. On the right, a **Preview** panel: a header
 with background preset toggles (checkerboard / white / black), the
-**FILL** and **BACKGROUND** rows, the Saved/Edited preview toggle
+**FILL** and **BACKGROUND** rows, the PNG/Editing preview toggle
 with its status text, the preview stage with the rendered image
 centred on the chosen background, and a bottom action row of **Copy**
-| **Export** | **Export PNG**. The toggle labels read "Saved" /
-"Edited" for both document kinds (the state machine semantics are
-unchanged: the pane opens on the saved view and switches only
-manually). When the edited render has not arrived yet or has
+| **Export** | **Export PNG**. The toggle labels read "PNG" /
+"Editing" (user decision 2026-10-29, replacing "Saved" / "Edited",
+which fitted the two document kinds unequally): PNG shows the
+raster the file itself holds, Editing shows the live render of the
+current source, and the pane opens on Editing, switching only
+manually. For an SVG document the PNG button is disabled - an SVG
+file holds no PNG image - and a plain PNG keeps the Issue #46
+view-only page, which shows the PNG itself. When the editing render has not arrived yet or has
 failed, the pane hides the image and the status line explains the
 state (rendering, none yet, or the failure) instead of leaving a
 broken-image placeholder. The styling follows the user's chosen design B (VS Code
@@ -540,8 +567,8 @@ validation in `src/messages.ts` in the existing style: `saveDocument`,
 exact no-field messages, and `applyRootFill` carries a single value
 string capped at 256 characters with control characters rejected.
 
-Verification: the extension suite passes 167 tests with 0 failures
-and 12 skips by default, and 179 of 179 with a real Core (the
+Verification: the extension suite passes 170 tests with 0 failures
+and 13 skips by default, and 183 of 183 with a real Core (the
 baseline on main was 120 passing / 12 skipped by default, 132 of 132
 with a real Core), and the TypeScript check passes. New coverage:
 the root-fill module (colour, `url(#id)` and quoted reads; set,
@@ -552,9 +579,114 @@ idempotence, already-formatted no-op), the message validation for
 every new type in exact and hostile shapes, the panel background
 state machine and hex normalization, the editor HTML structure and
 design-B CSS variables, the Monaco theme sync, the word-wrap toggle
-(the Toggle Word Wrap command and the Wrap button, persisted per panel), and the plain-PNG export with fake
+(the Toggle Word Wrap command and the Wrap button, persisted per panel), the PNG/Editing preview toggle (Editing opens by default, and
+the PNG button is disabled for SVG documents), the edited-preview transport (no preview travels as a
+webview-resource file; SVG previews are blob URLs built in the
+webview and Core PNG previews arrive as data URIs), and the plain-PNG export with fake
 dependencies (build route strips exactly the source chunk,
 convert route reports the normalization, both-routes-fail and
 strip-failure write nothing, dialog cancel writes nothing). Live
 screenshot comparison in a VS Code host remains Issue #18 work;
 Issue #45 stays open for that check.
+
+Follow-up (2026-10-29, user report): the code-folding chevrons
+did not render - Monaco loads its codicon icon font from an
+inlined `data:` URI, which the CSP's `font-src` (webview origin
+only) blocked; the hover tooltip appeared but no glyph. `font-src`
+now also allows `data:`; all other directives are unchanged, and
+the CSP test pins the value. Verified in the headless harness
+under the real CSP: the codicon font loads and the chevrons
+render in the folding gutter.
+
+Follow-up (2026-10-29, user report): a vector-png's Editing
+preview failed with "Output already exists" on every reopen.
+The Core publishes build output exclusively, the previews
+directory persists across sessions, and the preview renderer's
+output name was a per-instance sequence restarting at 1 - so a
+reopened editor's first build always targeted the previous
+session's leftover file. Output names now carry a per-instance
+random token, and each instance sweeps its document's preview
+files older than an hour on first use. A real-Core regression
+test renders through two renderer instances sharing one
+directory and one document key.
+
+Follow-up (2026-10-29, user request): the panel's Copy button
+moved to the code toolbar beside Wrap and was renamed
+**Copy SVG**; **Export** became **Export SVG** and
+**Export PNG** became **Export Plain PNG**, so every export
+control names its format. Behaviour and messages are unchanged
+(Copy SVG still posts `copySource` from the toolbar). The
+extension README's button table reflects the new labels and
+placement.
+
+Follow-up (2026-10-29, user request): while the first Editing
+render is still being generated, the preview status no longer
+reads "No editing preview yet." - a missing or stale render now
+always reads "Rendering the editing preview…", and the status
+clears only when the current revision's render is on screen.
+The "not there yet" wording survives nowhere: every state
+without an image and without an error has a render in flight.
+
+Follow-up (2026-10-29, macOS acceptance run, Issue #18): the
+checklist run passed everything except two undo cases and the
+Environment Status item. Items 5.7 (FILL Apply) and 6.2
+(Normalize SVG) showed that host-originated edits could not be
+undone with Cmd+Z in the code area: the webview applied host
+source updates with Monaco's `editor.setValue()`, which
+discards the undo stack. `sourceSync` now applies through
+`editor.executeEdits('vectorPng.hostSync', ...)` with
+`pushUndoStop()` - verified undoable against the bundled
+Monaco, including the focused keyboard path - while the initial
+load keeps `setValue` so a freshly loaded source cannot be
+undone to an empty model. Item 7.1: Environment Status showed a
+nonexistent configured Python path as the Effective Python with
+no hint it was invalid; the status now annotates a missing
+configured or effective path with "(file not found)". Full
+results are recorded in docs/TEST_RESULTS.md.
+
+Completion (2026-10-29): the build-14 re-check passed all
+three items - FILL Apply and Normalize SVG now revert with a
+single Cmd+Z (an Export SVG after each undo was byte-identical
+to the pre-edit source), and Environment Status flags the
+missing path with "(file not found)" - and the user declared
+the macOS acceptance complete. Recorded in
+docs/TEST_RESULTS.md and on Issue #18, which stays open for
+the Windows/Linux scope of the stable-release gate.
+
+## TypeScript Core integration — Issue #58
+
+Phase 1 of the TypeScript migration (parent Issue #61) is integrated: the extension now runs document open/inspect, edited previews, save, and the export validate/build routes on the TypeScript Core (packages/ts-core) in-process, instead of the Python Core over the bridge. Detection walks chunks with the ts-core container walk (src/detect.ts) — its vocabulary and structural passivity unchanged — and extraction (src/extract.ts) delegates to the ts-core container read, so opening applies the Core's full passive validation, including the bounded XML well-formedness check on the embedded source. Edited previews validate and render in-process and are posted to the webview as data URIs; the bridge validation lane and the whole temp-file preview machinery (exclusive publish names, the per-instance token, the hourly sweep, the previews storage directory) are removed, with supersession kept as a generation counter in the renderer.
+
+Save and the export build route share an in-process mirror of the Python Core's writing.py (src/tsCore.ts): validate, render, assemble, self-verify (re-read, byte-exact source round-trip, re-render comparison), then publish with the lock file, symlink refusal, revision token and backup snapshot, under the Core's error codes. Export profile validation is ts-core checkProfile with strict structure — the same gate the CLI's `validate --profile` computed — and the plain-PNG build route resolves its bytes from memory instead of a temp file. Consumption follows the bridge precedent (relative source imports, esbuild bundle); the resvg wasm (2,478,606 bytes) is copied into media/resvg at prepublish and registered with the renderer at activation. A VSIX built from a clean copy of this branch (162 files) contains extension/media/resvg/index_bg.wasm and the bundled host code, and the bundled form was smoke-tested end to end (activation, plus a full build through the packaged layout).
+
+Fonts are the host's system fonts — the interim strategy pending the Issue #61 decision: the common sans families plus a CJK family when present (12 buffers on the development machine), loaded once per activation (~160 ms) and shared by every render, with the file reads never repeating per render. Measured on the nameplate corpus file at 1200x620 in the development environment: first render ~310 ms including wasm initialisation; repeat preview renders ~100 ms at steady state, inside the 300 ms preview debounce; a full save build (two renders, for self-verification) ~315 ms.
+
+Normalize SVG and the normalization (convert) export route still run the Python Core; their port is Phase 2 (Issue #59). The Python setup commands remain until Phase 3, and their user-facing wording (Environment Status, the setup completion message, the normalization-route export hint) now scopes the Python requirement to those paths. Three deliberate behaviour differences from the Python path are recorded: a vector-png whose embedded source is not well-formed XML, or whose container fails the Core's full read validation (APNG markers, unknown critical chunks, an undecodable raster), is refused at open with the Core's diagnostic — the Core's own read semantics — instead of opening with an unrenderable source; a source whose aspect differs from the requested viewport is refused rather than stretched (resvg scales uniformly; real callers pass the document viewport); and the renderer's conservative external-reference scan can refuse text content that merely mentions a URL pattern (actual external references are already profile-invalid). Verification: extension suite 193 passed / 0 failed / 3 skipped by default and 196/196 with VECTOR_PNG_TEST_PYTHON set (only the Python convert/normalize tests remain gated); ts-core suite 105/105; tsc clean.
+
+## Normalizer port and the end of the Python paths — Issue #59
+
+Phase 2 of the TypeScript migration (parent Issue #61): the svg-normalization-v1 normalizer is ported to the TypeScript Core (packages/ts-core/src/normalize.ts, over the ElementTree-shaped DOM in src/dom.ts and the PNG pixel decoder in src/pngPixels.ts), mirroring the Python Core's normalize.py behaviour-for-behaviour — hardened parse, the closed CSS subset (with amendments G1 letter-spacing and G3 font-family), cascade materialization, section 3.1 marker expansion including G2 curved C-segment hosts, accessibility migration with its recorded losses, v1 revalidation of the result, the before/after render gate, and the section 7 conversion report in the Python report's shape and vocabulary. The extension's Normalize SVG (src/coreNormalize.ts) and the exports' normalization (convert) route (src/coreExport.ts) now call it in-process; the bounded Core-CLI spawn machinery they shared is removed, and no editor feature uses the Python Core any more. User-visible behaviour is preserved exactly: the summary notification with its recorded-loss warnings, "already normalized" when nothing changes, a failure leaving document and file untouched, application as a single undoable edit, and convert's no-clobber discipline with the orchestration's move-aside/restore-on-failure (src/export.ts) unchanged. The Python setup commands and settings remain until Phase 3 (Issue #60); the Python CLI keeps its own normalize/convert (its fate is an open Issue #61 decision).
+
+The gate now runs on resvg: the original and normalized sources are rendered with the same font set and compared for exact RGBA equality within the engine — the Python gate's rule, applied inside one engine; cross-engine comparison is not attempted. The report's render block names the engine (@resvg/resvg-wasm 2.6.2); its engine-specific fields are excluded from the report parity comparison, while the shared fields and the viewport must agree.
+
+Parity against the running Python Core (repo sources via PYTHONPATH; cases: the 27-case normalization catalog, the nameplate input/expected pair, the nine corpus SVGs, and crafted edge cases): structure-level agreement is total on all 48 cases — verdicts, failure codes, stages and messages, normalized output bytes and full section 7 reports identical. Gate verdicts agree on 38 of the 48; in the other 10 the Python gate passes and the resvg gate reports render-mismatch, every one traced to renderer semantics rather than the transformation (the outputs are byte-identical in all 10): CSS rx/ry, which resvg ignores in style sheets (5 cases: the catalog rounded-diagram-arrows and the corpus files pld-timeline, eu-product-framework-timeline, residual-risk-reassessment-flow and safety-information-traceability); native-marker versus expanded-clone rasterization (3 cases: the corpus files iso7010-global-alignment and iso7010-update-cycle, and a crafted small rotated marker); and markers on stroke="none" hosts (2 cases), which resvg does not paint natively while Cairo does. The stroke="none" handling is an explicit decision: the transformation mirrors Python exactly (such markers expand like any other, and the expanded clone is painted), so the within-resvg gate reports the difference; the output is NOT adjusted to suit one renderer, which would break byte parity with the Python normalizer. The divergences are tagged per case in ts-core's parity suite (KNOWN_GATE_DIVERGENCES), so a new disagreement fails the check; renderer-conformance records remain Issue #61's deferred scope, and docs/SPEC_COMPATIBILITY is unchanged because no file-format behaviour changed.
+
+Latency, measured through the extension's normalize dependency in the development environment: the nameplate fixture normalizes in about 90–150 ms at steady state (about 570 ms for a process's first call, which also initializes the wasm and loads the host fonts), the largest corpus file (ce-marking-qr-nameplate.svg) in about 240–290 ms, and ce-mark.svg in about 34 ms.
+
+Verification: extension suite 196/196 by default and 196/196 with VECTOR_PNG_TEST_PYTHON set (no extension test is Python-gated any more; the normalize/convert integration tests run against ts-core by default); ts-core suite 133/133, including the new normalizer suite (26 tests: the catalog verdicts, the nameplate golden pair, the Python suite's cascade/CSS/marker/accessibility/resource expectations, the gated entry point, and the stroke="none" decision tests) and the normalization cross-check above; tsc clean. Remaining: a live VS Code host check of the switched flows on the user's machine (the Phase 1 acceptance pattern), Phase 3 (Issue #60), and the Issue #61 decisions (font strategy; the standalone Python CLI/Core's fate).
+
+## Render-gate accommodation for the TS normalizer — Issue #59 follow-up (option A)
+
+By the user's decision (2026-10-29, option A), the TS render gate no longer renders the raw input as its before-image. resvg cannot render two construct classes in the input's original form: it ignores every SVG2 geometry property in CSS (measured on resvg 2.6.2: x, y, width, height, cx, cy, r, rx, ry — via style rules and style attributes alike; within the profile's closed CSS subset only rx/ry can ever be cascaded), and it antialiases native markers differently from the profile's expanded clones and does not paint them at all on stroke="none" hosts. That is why 10 of the 48 parity cases above — 6 of the 9 corpus SVGs among them — failed the TS gate despite byte-identical normalized outputs. The before-image is now an accommodated copy of the input (gateInputText in packages/ts-core/src/normalize.ts) with exactly two accommodations and nothing else: a cascaded geometry winner that arrives via CSS is also set as the element's attribute (computed by the transformation's own cascade), and markers are expanded by the transformation's own section 3.1 code path, with marker-end consumed from the gate input's CSS as well so no native marker paints beside its clone. The transformation and its outputs are unchanged — never adjusted to suit one renderer — all other CSS stays in CSS form in the before-image, and exact RGBA equality still decides; a hand-broken output still fails the gate (negative control in the ts-core suite). The honest narrowing: for the two accommodated construct classes the gate no longer independently proves that CSS-to-attribute materialization and marker expansion preserve rendering; that fidelity is covered by the byte-exact structure parity against the Python Core (48/48), while everything else is still compared across two different source forms by the gate itself. Results: the parity cross-check now agrees with the Python Core on all 48 cases for structure AND gate verdict (KNOWN_GATE_DIVERGENCES in the ts-core parity suite is emptied and kept as the enforcement mechanism — a new disagreement fails the check rather than being re-tagged silently); all nine corpus SVGs pass TS normalize end-to-end; ts-core suite 139/139; extension suite 196/196 by default; tsc clean.
+
+## Phase 3: the Python retirement — Issue #60
+
+The user's decision (recorded on Issue #61): the standalone Python CLI/Core is retired — not kept, and not ported as a separate CLI. Phase 3 removes it and everything that existed to support it. First, the fixtures the TypeScript side depends on moved from packages/core/tests/fixtures/ to packages/ts-core/fixtures/ (the normalization catalog and nameplate trio, qr-matrix.json, vectors.json and their provenance notes), preserving every blob byte-for-byte; the extension's safe-svg profile drift guard now imports the allowlist from the TS Core's validate.ts instead of parsing the Python _backend.py. Then the extension's Python machinery was removed: the Set Up Python Environment, Python Environment Status and Roll Back Python Environment commands, the vectorPng.corePythonPath / vectorPng.coreWheelPath settings (the manifest's entire configuration contribution), src/managedEnv.ts, src/pythonDiscovery.ts and the managed/ requirements lock. The manifest now declares five commands (Open in Editor, Export as Vector PNG, Normalize SVG, New Document, Toggle Word Wrap) and no configuration. The bridge package was removed with it — after the switch nothing in runtime code, tests or tooling imported it, and no live drift guard lived there — along with tools/check_environment_manager.py, its test runner. The tests that exercised the Python machinery itself (discovery, managed environments, the status annotation) were deleted; no extension test is Python-gated any more.
+
+packages/core is deleted in full, and so are the root requirements.lock, the docs/CLI.md, docs/CODEX.md and docs/BRIDGE.md pairs, the vector-png agent Skill (its workflow was the retired CLI), and the root schemas/cli-*.schema.json protocol schemas. docs/INSTALL.md is rewritten for the TS-only install (VSIX install, VS Code 1.90+, no Python, no native libraries, no setup; the retired environment is a short history section), docs/ARCHITECTURE.md describes the ts-core architecture (in-process library Core, no bridge protocol, no venv, VSIX-only delivery), and the root README no longer presents a CLI or Python setup. Historical documents (CORE_PROGRESS, PHASE0, the planning issues, SAFE_SVG_V1) keep their wording; only dead links in CORE_PROGRESS, WRITING and SPEC_COMPATIBILITY were repaired, and SPEC_COMPATIBILITY's renderer-conformance records are deliberately untouched (that pass remains deferred per Issue #61). One known leftover: docs/RELEASE.md still describes the retired wheel/PyPI release flow in its runbook text — refreshing it belongs to Issue #20's release preparation, together with the version work (the version itself is unchanged: 0.1.0-dev3).
+
+Workflows: the release flow is VSIX-only (wheel/sdist build, CLI smoke test and the PyPI step are gone; the tag and prerelease mechanics are unchanged, and tools/check_versions.py now takes the extension package.json version as canonical); core.yml runs the ts-core suite on Node 24 across the three OSes in place of the Python/Cairo matrix (job id and the core-check aggregator keep their names); extension.yml installs packages/ts-core first, because the extension suites import it in-process. The generated profile rules (schemas/safe-svg-v1.rules.md, via tools/generate_safe_svg_schemas.py) no longer instruct callers to use the retired CLI.
+
+THIRD_PARTY_NOTICES.md (repository root) is rewritten for the shipped set: @resvg/resvg-wasm 2.6.2 (MPL-2.0; the unmodified package's index_bg.wasm is copied into the VSIX under media/resvg/) and Monaco Editor 0.57.0 (MIT); the Python pin table and the native-Cairo section are removed, and the upstream provenance (the vector-png adaptation and the spec fixtures) is carried here from the deleted packages/core notices. The MIT text that lived only in packages/core/LICENSE is restored verbatim as the repository-root LICENSE. A narrowed successor of the Python suite's notices guard, packages/ts-core/tests/notices.test.mjs, asserts the root notices name resvg at the version pinned in ts-core's package.json. One consequence is recorded plainly: the live parity harness (ts-core's parity.test.mjs + parity_driver.py) compared against the running Python Core, so it was removed with its reference; its final recorded results (141 SVG and 60 PNG cases in full agreement; 48/48 on normalization structure and gate verdicts) stand as the evidence at retirement time, and the baked pure-TS expectation suites are the standing coverage.
+
+End-state proof: a VSIX built from a clean copy of this tree (no wheel step exists any more) contains 161 files at 6.53 MB, including extension/media/resvg/index_bg.wasm at 2,478,606 bytes (size-identical to the npm package's) and no managed/ content; its packaged manifest declares the five commands above, no configuration contribution and zero occurrences of "python" (case-insensitive); the packaged out/extension.js, loaded with a stubbed vscode module, completes activate() and registers the custom editor provider plus exactly those five commands. Verification: ts-core suite 135/135; extension suite 185/185 by default (the only variant is gone); tsc clean; tools/check_planning.py passes on a clean archive of this tree. Remaining: the live VS Code host check of the switched flows on the user's machine, the Issue #61 font-strategy decision (the host-font interim continues), and the Issue #20 release preparation noted above.

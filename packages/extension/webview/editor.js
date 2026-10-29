@@ -35,6 +35,39 @@ function elementSuggestions(model, position) {
 }
 const previewState = window.VpePreviewState.createPreviewState();
 let savedUri = '';
+let documentKind = 'vector-png';
+
+// Issue #47 follow-up (2026-10-29): for SVG documents the edited
+// preview renders locally from the model text. A host-side
+// temporary file is refused by the webview resource server in a
+// real VS Code host (401), so the current source becomes a blob
+// URL image instead - no file round-trip, and display is never
+// blocked by the safe-svg-v1 profile. Mirrors the host pipeline's
+// 300 ms debounce and its no-<svg>-root invalid outcome.
+const SVG_PREVIEW_DEBOUNCE_MS = 300;
+let svgPreviewTimer = undefined;
+let svgPreviewUrl = null;
+function sourceHasSvgRoot(source) {
+  const start = source.search(/<svg(?=[\s/>])/);
+  return start !== -1 && source.indexOf('>', start) !== -1;
+}
+function scheduleSvgPreview() {
+  if (documentKind !== 'svg' || !editor) return;
+  const forRevision = revision;
+  if (svgPreviewTimer !== undefined) clearTimeout(svgPreviewTimer);
+  svgPreviewTimer = setTimeout(() => {
+    svgPreviewTimer = undefined;
+    const source = editor.getValue();
+    if (!sourceHasSvgRoot(source)) {
+      previewState.editedInvalid('The source has no <svg> root element to preview');
+    } else {
+      if (svgPreviewUrl !== null) URL.revokeObjectURL(svgPreviewUrl);
+      svgPreviewUrl = URL.createObjectURL(new Blob([source], { type: 'image/svg+xml' }));
+      previewState.editedRendered(svgPreviewUrl, forRevision);
+    }
+    refreshPreview();
+  }, SVG_PREVIEW_DEBOUNCE_MS);
+}
 
 function refreshPreview() {
   const img = document.getElementById('preview');
@@ -53,9 +86,9 @@ function refreshPreview() {
   document.getElementById('show-edited').setAttribute('aria-pressed', String(previewState.mode === 'edited'));
   const status = document.getElementById('preview-status');
   status.textContent = previewState.mode === 'edited'
-    ? (previewState.editedError ?? (previewState.editedUri
-      ? (previewState.editedRevision < revision ? 'Rendering the edited preview…' : '')
-      : 'No edited preview yet.'))
+    ? (previewState.editedError ?? (previewState.editedUri && previewState.editedRevision >= revision
+      ? ''
+      : 'Rendering the editing preview…'))
     : '';
 }
 document.getElementById('show-saved').addEventListener('click', () => {
@@ -77,7 +110,7 @@ document.getElementById('show-edited').addEventListener('click', () => {
 // FILL value is not panel state - it always mirrors the source and
 // arrives from the host.
 const persistedPanel = vscode.getState() ?? {};
-if (persistedPanel.previewMode === 'edited') previewState.showEdited();
+if (persistedPanel.previewMode === 'saved') previewState.showSaved();
 previewState.setBackgroundPreset(typeof persistedPanel.backgroundPreset === 'string' ? persistedPanel.backgroundPreset : 'checkerboard');
 if (typeof persistedPanel.customColor === 'string') previewState.setBackgroundCustom(persistedPanel.customColor);
 if (previewState.mode !== 'saved') vscode.postMessage({ type: 'setPreviewMode', mode: previewState.mode });
@@ -219,9 +252,16 @@ fillText.addEventListener('keydown', (event) => { if (event.key === 'Enter') app
 
 document.getElementById('tool-save').addEventListener('click', () => vscode.postMessage({ type: 'saveDocument' }));
 document.getElementById('tool-format').addEventListener('click', () => vscode.postMessage({ type: 'formatSource' }));
-document.getElementById('action-copy').addEventListener('click', () => vscode.postMessage({ type: 'copySource' }));
+document.getElementById('tool-copy').addEventListener('click', () => vscode.postMessage({ type: 'copySource' }));
 document.getElementById('action-export').addEventListener('click', () => vscode.postMessage({ type: 'exportSource' }));
 document.getElementById('action-export-png').addEventListener('click', () => vscode.postMessage({ type: 'exportPng' }));
+// SVG-only panel buttons (Issue #47 commands): the row stays hidden
+// until init identifies an SVG document. Null-safe like the Wrap
+// wiring - a page retained across an upgrade may predate the row.
+const normalizeButton = document.getElementById('action-normalize');
+if (normalizeButton) normalizeButton.addEventListener('click', () => vscode.postMessage({ type: 'normalizeSvg' }));
+const exportVectorPngButton = document.getElementById('action-export-vector-png');
+if (exportVectorPngButton) exportVectorPngButton.addEventListener('click', () => vscode.postMessage({ type: 'exportAsVectorPng' }));
 refreshBackground();
 let revision = 0;
 let applyingHostUpdate = false;
@@ -276,6 +316,7 @@ require(['vs/editor/editor.main'], (monaco) => {
     if (applyingHostUpdate || !editor) return;
     revision += 1;
     vscode.postMessage({ type: 'sourceChanged', revision, source: editor.getValue() });
+    scheduleSvgPreview();
   });
 
   vscode.postMessage({ type: 'ready' });
@@ -292,6 +333,25 @@ window.addEventListener('message', (event) => {
       textElements: message.textElements ?? [],
     };
     savedUri = message.previewUri;
+    documentKind = typeof message.kind === 'string' ? message.kind : 'vector-png';
+    if (documentKind === 'svg') {
+      // An SVG file holds no PNG image: the PNG view is unavailable
+      // and the pane stays on Editing (user decision, 2026-10-29).
+      const pngButton = document.getElementById('show-saved');
+      if (pngButton) {
+        pngButton.disabled = true;
+        pngButton.title = 'An SVG file has no PNG image';
+      }
+      if (previewState.mode !== 'edited') {
+        previewState.showEdited();
+        vscode.postMessage({ type: 'setPreviewMode', mode: 'edited' });
+        persistPanelState();
+      }
+      // The SVG-only action row (Normalize SVG / Export as Vector
+      // PNG) appears for SVG documents only.
+      const svgActions = document.getElementById('preview-actions-svg');
+      if (svgActions) svgActions.hidden = false;
+    }
     refreshPreview();
     refreshBackground();
     if (message.rootFill) refreshRootFill(message.rootFill.available === true, typeof message.rootFill.value === 'string' ? message.rootFill.value : '');
@@ -301,6 +361,7 @@ window.addEventListener('message', (event) => {
       editor.setValue(message.source);
       applyingHostUpdate = false;
     }
+    scheduleSvgPreview();
   } else if (message.type === 'rootFill') {
     refreshRootFill(message.available === true, typeof message.value === 'string' ? message.value : '');
   } else if (message.type === 'toggleWordWrap') {
@@ -313,9 +374,25 @@ window.addEventListener('message', (event) => {
   } else if (message.type === 'sourceSync') {
     if (editor && editor.getValue() !== message.source) {
       applyingHostUpdate = true;
-      editor.setValue(message.source);
+      const model = editor.getModel();
+      if (model) {
+        // Apply host-originated changes (Normalize SVG, FILL Apply,
+        // host undo/redo, external-change reloads) as an undoable
+        // Monaco edit, NOT via setValue: setValue discards the undo
+        // stack, which made those edits impossible to undo with
+        // Cmd+Z in the code area (macOS acceptance findings on
+        // checklist items 5.7 and 6.2, Issue #18; mechanism verified
+        // against the bundled Monaco). The initial load in the init
+        // handler still uses setValue on purpose - the freshly
+        // loaded source must not be undoable back to an empty model.
+        editor.executeEdits('vectorPng.hostSync', [{ range: model.getFullModelRange(), text: message.source }]);
+        editor.pushUndoStop();
+      } else {
+        editor.setValue(message.source);
+      }
       applyingHostUpdate = false;
     }
+    scheduleSvgPreview();
   } else if (message.type === 'previewRendered') {
     previewState.editedRendered(message.uri, message.revision);
     refreshPreview();

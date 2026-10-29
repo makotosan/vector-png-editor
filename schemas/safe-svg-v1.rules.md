@@ -53,9 +53,11 @@ only what is listed here, then validate before any file is written.
 ## Workflow
 
 1. Generate the SVG XML directly; no JSON intermediate form.
-2. Validate: `vector-png-editor validate <file.svg> --profile safe-svg-v1`
-   and fix every diagnostic (severity/code/element/attribute/line/
-   column/message/suggestion) before proceeding.
-3. Only after validation passes, build or overwrite the PNG through
-   the revision-checked CLI workflow (docs/CODEX.md). A failing SVG
-   must never overwrite an existing vector-png.
+2. Validate before any file is written: open the SVG in the Vector
+   PNG Editor extension, whose TypeScript Core validates against
+   this profile, and fix every diagnostic (severity/code/element/
+   attribute/line/column/message/suggestion) before proceeding.
+3. Only after validation passes, save or export the PNG from the
+   editor; its build path revalidates and refuses a failing
+   source. A failing SVG must never overwrite an existing
+   vector-png.

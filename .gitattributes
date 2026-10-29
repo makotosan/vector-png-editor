@@ -3,4 +3,4 @@
 # endings on every platform; a Windows checkout (autocrlf) must not
 # drift the bytes and fail the comparisons.
 schemas/** text eol=lf
-packages/core/tests/fixtures/** text eol=lf
+packages/ts-core/fixtures/** text eol=lf

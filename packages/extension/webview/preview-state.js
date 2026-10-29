@@ -1,10 +1,14 @@
 // Preview pane state for the webview. Pure logic, no DOM access, so it
 // can be unit-tested outside the webview.
 //
-// Invariant (P2-03): the mode changes ONLY through showSaved/showEdited,
-// which are wired to the user's toggle buttons. Arriving preview results
-// never change the mode - there is no automatic toggle. The saved mode
-// always shows the actual saved raster.
+// The two modes are labelled "PNG" and "Editing" in the UI (user
+// decision, 2026-10-29): the 'saved' mode shows the PNG image the
+// file itself holds, and the 'edited' mode shows the live render of
+// the source being edited. The pane opens on Editing. The mode
+// changes ONLY through showSaved/showEdited, which are wired to the
+// user's toggle buttons - arriving preview results never change the
+// mode. For an SVG document the PNG mode is unavailable (an SVG file
+// holds no PNG image) and the webview disables its button.
 //
 // The same object also carries the Preview panel's background choice
 // (Issue #45): one of the checkerboard/white/black presets or a custom
@@ -26,7 +30,7 @@
     return '#' + hex;
   }
   function createPreviewState() {
-    let mode = 'saved';
+    let mode = 'edited';
     let editedUri = null;
     let editedRevision = -1;
     let editedError = null;

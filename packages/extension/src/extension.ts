@@ -1,11 +1,11 @@
 import * as vscode from 'vscode';
 import { randomBytes, createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { detectPng } from './detect.ts';
 import { routeFor, routeForFile } from './routing.ts';
 import { openModeFor } from './openMode.ts';
 import { decodeSvgText, isSvgFileName, svgDocumentSize } from './svgSource.ts';
-import { createSvgPreviewRenderer } from './svgPreview.ts';
 import { createNodeSvgSaveDeps, saveSvgTextFile, SvgSaveConflictError } from './svgSave.ts';
 import { exportSvgAsVectorPng, formatProfileDiagnostics, type ProfileDiagnostic } from './export.ts';
 import { createCoreExportDeps, createCorePlainPngDeps } from './coreExport.ts';
@@ -24,15 +24,13 @@ import { readFileSync } from 'node:fs';
 import { buildEditorHtml, buildViewHtml } from './webviewHtml.ts';
 import { PreviewController } from './preview.ts';
 import { createCorePreviewRenderer } from './corePreview.ts';
+import { loadHostFonts } from './hostFonts.ts';
+import { createTsCoreRuntime, type TsCoreRuntime } from './tsCore.ts';
 import { saveInPlace, saveAs } from './save.ts';
 import { createCoreSaveDeps } from './coreSave.ts';
 import { SourceHistory } from './history.ts';
 import { writeBackup, readBackup, deleteBackup } from './backup.ts';
 import { ExternalChangeTracker } from './watch.ts';
-import { discoverPython, parseProbeOutput, PROBE_SCRIPT } from './pythonDiscovery.ts';
-import { resolveCorePython, managedPython, locateCoreArtifacts } from './managedEnv.ts';
-import { prepareEnvironment, rollbackEnvironment, EnvironmentError, isolatedEnvironment } from '../../bridge/src/environment.ts';
-import { runBounded } from '../../bridge/src/process.ts';
 
 export const VIEW_TYPE = 'vectorPng.editor';
 
@@ -118,8 +116,7 @@ type VectorPngEdit = {
 // authoritative undo/redo history, backup recovery and multi-panel
 // synchronization are P2-05; external-change watching with revision
 // tokens, clean reload, dirty preservation and explicit conflict
-// resolution at save is P2-06; Python discovery and the managed
-// environment lifecycle (bridge manager) are P2-07. Plain `.svg`
+// resolution at save is P2-06. Plain `.svg`
 // documents (open/edit/save as text, export as vector-png through the
 // Core `build` or the normalization `convert` route, and the explicit
 // undoable Normalize SVG command) are Issue #47.
@@ -171,17 +168,8 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly storageUri: vscode.Uri | undefined,
-    private readonly extensionDir: string,
-    private readonly managedRoot: string,
+    private readonly tsRuntime: TsCoreRuntime,
   ) {}
-
-  // Python resolution (P2-07): an explicit setting wins; otherwise
-  // the managed environment's active interpreter.
-  private corePythonPath(): Promise<string | undefined> {
-    const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
-    return resolveCorePython(this.managedRoot, configured);
-  }
 
   async openCustomDocument(uri: vscode.Uri): Promise<VectorPngDocument> {
     const bytes = await vscode.workspace.fs.readFile(uri);
@@ -338,12 +326,9 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   async resolveCustomEditor(document: VectorPngDocument, panel: vscode.WebviewPanel): Promise<void> {
     const mediaRoot = vscode.Uri.joinPath(this.extensionUri, 'media');
     const webviewRoot = vscode.Uri.joinPath(this.extensionUri, 'webview');
-    const previewDirUri = this.storageUri
-      ? vscode.Uri.joinPath(this.storageUri, 'previews')
-      : vscode.Uri.joinPath(document.uri, '..');
     panel.webview.options = {
       enableScripts: true,
-      localResourceRoots: [mediaRoot, webviewRoot, vscode.Uri.joinPath(document.uri, '..'), previewDirUri],
+      localResourceRoots: [mediaRoot, webviewRoot, vscode.Uri.joinPath(document.uri, '..')],
     };
     const asUri = (uri: vscode.Uri) => panel.webview.asWebviewUri(uri).toString();
     const savedUri = () => panel.webview.asWebviewUri(document.uri)
@@ -375,28 +360,26 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     }
     panel.webview.html = buildEditorHtml(assets);
 
-    const documentKey = createHash('sha256').update(document.uri.toString()).digest('hex').slice(0, 16);
-    // Preview rendering differs by kind: a vector-png's edited source
-    // renders through the Core (which validates first), while a plain
-    // SVG renders as-is from a private file - the Core preview path
-    // cannot show a non-conforming SVG at all, and display is never
-    // blocked by the profile (Issue #47).
-    const renderer = document.kind === 'svg'
-      ? createSvgPreviewRenderer({ previewDir: previewDirUri.fsPath, documentKey })
-      : createCorePreviewRenderer({
-          pythonPath: await this.corePythonPath(),
-          previewDir: previewDirUri.fsPath,
-          width: document.width,
-          height: document.height,
-          documentKey,
-        });
-    const preview = new PreviewController(
-      renderer,
+    // Edited previews never travel as webview resources: in a real
+    // VS Code host the temporary preview files are refused with a
+    // 401 by the webview resource server (found in the Issue #18
+    // live check, 2026-10-29), while the saved file - a real
+    // workspace file - loads fine. So a vector-png's edited preview
+    // is rendered in-process by the TypeScript Core (Issue #58) and
+    // posted to the webview as a data URI, and a plain SVG's edited
+    // preview is rendered inside the webview itself from the model
+    // text (blob URL; the Core preview path validates first and
+    // cannot show a general SVG at all - Issue #47). Display is
+    // never blocked by the profile.
+    const preview = document.kind === 'svg' ? undefined : new PreviewController(
+      createCorePreviewRenderer({
+        runtime: this.tsRuntime,
+        width: document.width,
+        height: document.height,
+      }),
       (event) => {
         if (event.type === 'rendered') {
-          const uri = panel.webview.asWebviewUri(vscode.Uri.file(join(event.imagePath)))
-            .with({ query: `rev=${event.revision}` }).toString();
-          void panel.webview.postMessage({ type: 'previewRendered', revision: event.revision, uri });
+          void panel.webview.postMessage({ type: 'previewRendered', revision: event.revision, uri: event.imageUri });
         } else if (event.type === 'invalid') {
           void panel.webview.postMessage({ type: 'previewInvalid', revision: event.revision, message: event.message });
         } else {
@@ -419,7 +402,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       void panel.webview.postMessage({ type: 'sourceSync', source });
       postRootFill();
       sendDiagnostics(source);
-      preview.schedule(source, -1);
+      preview?.schedule(source, -1);
     });
     const savedSubscription = document.onSaved(() => {
       void panel.webview.postMessage({ type: 'saved', previewUri: savedUri() });
@@ -443,7 +426,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     updateKindContext();
     // Show the Core-rendered edited preview for the untouched source too;
     // the pane still opens on the saved raster and never auto-switches.
-    if (document.pendingSource !== undefined) preview.schedule(document.pendingSource, 0);
+    if (document.pendingSource !== undefined) preview?.schedule(document.pendingSource, 0);
 
     // Issue #45 panel actions. A host-originated source change (root
     // fill, Format) goes through the same machinery as Normalize
@@ -498,7 +481,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       const source = document.pendingSource ?? document.savedSource ?? '';
       const defaultName = document.kind === 'svg' ? `${documentStem()}.png` : `${documentStem()}.plain.png`;
       const deps = {
-        ...createCorePlainPngDeps(await this.corePythonPath()),
+        ...createCorePlainPngDeps(this.tsRuntime),
         chooseTarget: async (defaultPath: string): Promise<string | null> => {
           const target = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file(defaultPath),
@@ -543,6 +526,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       if (message.type === 'ready') {
         void panel.webview.postMessage({
           type: 'init',
+          kind: document.kind,
           previewUri: savedUri(),
           meta: document.kind === 'svg'
             ? `${document.width} x ${document.height} SVG source`
@@ -565,7 +549,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         document.pendingSource = next;
         sendDiagnostics(next);
         postRootFill();
-        preview.schedule(next, message.revision);
+        preview?.schedule(next, message.revision);
         document.syncSource(next, panelId); // Keep other panels in step.
         const applyPointer = (source: string | undefined) => {
           if (source !== undefined) document.syncSource(source);
@@ -612,6 +596,10 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         void exportSourceToFile();
       } else if (message.type === 'exportPng') {
         void exportPlainPngFromPanel();
+      } else if (message.type === 'normalizeSvg') {
+        void this.normalizeSvg(document.uri);
+      } else if (message.type === 'exportAsVectorPng') {
+        void this.exportAsVectorPng(document.uri);
       }
     });
     panel.onDidDispose(() => {
@@ -620,7 +608,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       savedSubscription.dispose();
       noticeSubscription.dispose();
       viewStateSubscription.dispose();
-      preview.dispose();
+      preview?.dispose();
       if (this.activeEditorPanel === panel) this.activeEditorPanel = undefined;
     });
   }
@@ -670,7 +658,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         const expected = document.tracker.isDeleted || forceOverwrite ? undefined : document.tracker.agreedSha;
         await saveSvgTextFile(createNodeSvgSaveDeps(), document.uri.fsPath, source, expected);
       } else {
-        const deps = createCoreSaveDeps(await this.corePythonPath());
+        const deps = createCoreSaveDeps(this.tsRuntime);
         if (document.tracker.isDeleted) {
           // Recreate a file deleted on disk from the preserved buffer.
           await saveAs(deps, document.uri.fsPath, {
@@ -705,7 +693,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
         // The Save As dialog already confirmed any replacement.
         await saveSvgTextFile(createNodeSvgSaveDeps(), targetUri.fsPath, source, undefined);
       } else {
-        await saveAs(createCoreSaveDeps(await this.corePythonPath()), targetUri.fsPath, {
+        await saveAs(createCoreSaveDeps(this.tsRuntime), targetUri.fsPath, {
           source, width: document.width, height: document.height,
           isCancelled: () => cancellation.isCancellationRequested,
         });
@@ -802,7 +790,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     }
     const targetPath = uri.fsPath.replace(/\.svg$/i, '.png');
     const deps = {
-      ...createCoreExportDeps(await this.corePythonPath()),
+      ...createCoreExportDeps(this.tsRuntime),
       confirmOverwrite: async (path: string): Promise<boolean> => {
         const name = path.split('/').pop() ?? path;
         const choice = await vscode.window.showWarningMessage(
@@ -886,7 +874,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       return;
     }
     const source = document.pendingSource ?? document.savedSource ?? '';
-    const result = await normalizeSourceText(createCoreNormalizeDeps(await this.corePythonPath()), source);
+    const result = await normalizeSourceText(createCoreNormalizeDeps(this.tsRuntime), source);
     if (result.status === 'already-normalized') {
       void vscode.window.showInformationMessage('Vector PNG: this SVG is already in normalized safe-svg-v1 form; no changes were made.');
       return;
@@ -962,75 +950,20 @@ async function newDocument(): Promise<void> {
   await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
 }
 
-const PYTHON_HINT = 'Install Python 3.11-3.13 from https://www.python.org/downloads/ (Windows: tick "Add python.exe to PATH" or install the py launcher; macOS: the python.org installer or Homebrew; Linux: your distribution packages), then run the setup command again.';
-const CAIRO_HINT = 'The Core also needs the native Cairo library: Windows - install the GTK runtime; macOS - `brew install cairo`; Linux - install libcairo2 from your distribution. Then run the setup command again.';
-
-async function probeCandidate(candidate: { command: string; args: string[] }) {
-  const { stdout } = await runBounded(candidate.command, [...candidate.args, '-I', '-c', PROBE_SCRIPT], {
-    env: isolatedEnvironment(), cwd: process.cwd(), timeoutMs: 15_000,
-  });
-  return parseProbeOutput(stdout);
-}
-
-async function setupEnvironment(context: vscode.ExtensionContext, managedRoot: string): Promise<void> {
-  const discovery = await discoverPython(probeCandidate, process.platform);
-  if (!discovery.selected) {
-    const found = discovery.unsupported.map((u) => `${u.version.join('.')} (${u.via})`).join(', ');
-    void vscode.window.showErrorMessage(
-      `Vector PNG: no supported Python found.${found ? ` Found only unsupported versions: ${found}.` : ''} ${PYTHON_HINT}`);
-    return;
-  }
-  const artifacts = await locateCoreArtifacts({
-    extensionDir: context.extensionPath,
-    wheelSetting: vscode.workspace.getConfiguration('vectorPng').get<string>('coreWheelPath'),
-  });
-  if (!artifacts) {
-    void vscode.window.showErrorMessage(
-      'Vector PNG: no Core wheel found. Set "vectorPng.coreWheelPath" to a trusted vector_png_editor_core wheel, or install a build that bundles one.');
-    return;
-  }
-  const allowNetwork = await vscode.window.showInformationMessage(
-    `Set up the managed Python environment from the Core ${artifacts.version} wheel (${artifacts.source})? Dependencies install from the pinned lock; setup never touches your system Python, and a failure keeps the current environment.`,
-    { modal: true }, 'Set up (offline, local wheelhouse only)', 'Set up (allow network)');
-  if (!allowNetwork) return;
-  const controller = new AbortController();
-  try {
-    const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Vector PNG: setting up the Python environment', cancellable: true },
-      async (progress, token) => {
-        token.onCancellationRequested(() => controller.abort());
-        return prepareEnvironment({
-          root: managedRoot, python: discovery.selected!.executable,
-          wheel: artifacts.wheel, wheelSha256: artifacts.wheelSha256, version: artifacts.version,
-          requirements: artifacts.requirements, requirementsSha256: artifacts.requirementsSha256,
-          allowNetwork: allowNetwork.includes('allow network'), signal: controller.signal,
-          onProgress: (stage) => progress.report({ message: stage }),
-        });
-      });
-    void vscode.window.showInformationMessage(`Vector PNG: environment ready (${result.python}). Edited previews and saving now use the Python Core.`);
-  } catch (error) {
-    const stage = error instanceof EnvironmentError ? error.stage : '';
-    const message = error instanceof Error ? error.message : String(error);
-    const hint = /cairo|render/i.test(stage + message) ? ` ${CAIRO_HINT}` : '';
-    void vscode.window.showErrorMessage(`Vector PNG setup failed (${stage || 'error'}): ${message}. The previous environment, if any, is unchanged.${hint}`);
-  }
-}
-
-async function environmentStatus(managedRoot: string): Promise<void> {
-  const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
-  const managed = await managedPython(managedRoot);
-  const effective = await resolveCorePython(managedRoot, configured);
-  const lines = [
-    `Configured Python: ${configured?.trim() ? configured : '(not set)'}`,
-    `Managed environment: ${managed ?? '(none - run "Vector PNG: Set Up Python Environment")'}`,
-    `Effective Python: ${effective ?? '(none - edited previews and saving are unavailable; the saved PNG preview still works)'}`,
-  ];
-  void vscode.window.showInformationMessage(lines.join('  '), { modal: true });
-}
-
 export function activate(context: vscode.ExtensionContext): void {
-  const managedRoot = join(context.globalStorageUri.fsPath, 'managed-env');
-  const provider = new VectorPngEditorProvider(context.extensionUri, context.globalStorageUri, context.extensionPath, managedRoot);
+  // The TypeScript Core runtime (Issue #58): host fonts are loaded
+  // once for the activation, and the resvg wasm is located before
+  // any render - the packaged copy under media/resvg in a VSIX, or
+  // the ts-core package's own copy in a source checkout.
+  const wasmCandidates = [
+    join(context.extensionPath, 'media', 'resvg', 'index_bg.wasm'),
+    join(context.extensionPath, '..', 'ts-core', 'node_modules', '@resvg', 'resvg-wasm', 'index_bg.wasm'),
+  ];
+  const tsRuntime = createTsCoreRuntime({
+    fonts: loadHostFonts(),
+    wasmPath: wasmCandidates.find((candidate) => existsSync(candidate)),
+  });
+  const provider = new VectorPngEditorProvider(context.extensionUri, tsRuntime);
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -1040,17 +973,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('vectorPng.exportAsVectorPng', (target?: vscode.Uri) => provider.exportAsVectorPng(target)),
     vscode.commands.registerCommand('vectorPng.normalizeSvg', (target?: vscode.Uri) => provider.normalizeSvg(target)),
     vscode.commands.registerCommand('vectorPng.newDocument', newDocument),
-    vscode.commands.registerCommand('vectorPng.setupEnvironment', () => setupEnvironment(context, managedRoot)),
     vscode.commands.registerCommand('vectorPng.toggleWordWrap', () => provider.toggleWordWrapOnActivePanel()),
-    vscode.commands.registerCommand('vectorPng.environmentStatus', () => environmentStatus(managedRoot)),
-    vscode.commands.registerCommand('vectorPng.rollbackEnvironment', async () => {
-      try {
-        const result = await rollbackEnvironment({ root: managedRoot });
-        void vscode.window.showInformationMessage(`Vector PNG: rolled back to the previous environment (${result.python}).`);
-      } catch (error) {
-        void vscode.window.showErrorMessage(`Vector PNG rollback failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }),
   );
 }
 

@@ -38,8 +38,9 @@ export type ConvertOutcome =
   | { ok: true; warnings: string[] }
   | { ok: false; code: string; message: string };
 
-// The Core was not reachable at all (no Python configured, launch
-// failure, timeout, protocol violation). `code` is machine-readable.
+// A Core refusal the operation could not absorb (a validate-stage
+// failure, or a dependency that cannot run at all). `code` is
+// machine-readable.
 export class ExportCoreError extends Error {
   code: string;
   constructor(code: string, message: string) { super(message); this.code = code; }

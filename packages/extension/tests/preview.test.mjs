@@ -37,7 +37,7 @@ test('renders only after 300ms idle, once, with the latest source', async () => 
   timers.advance(1);
   await flush();
   assert.deepEqual(calls, [['v3', 3]]);
-  assert.deepEqual(events, [{ type: 'rendered', revision: 3, imagePath: '/tmp/p.png' }]);
+  assert.deepEqual(events, [{ type: 'rendered', revision: 3, imageUri: '/tmp/p.png' }]);
   c.dispose();
 });
 
@@ -55,7 +55,7 @@ test('out-of-order worker results: the stale render is discarded', async () => {
   await flush();
   resolvers.get(1)('/tmp/old.png');           // stale finishes later
   await flush();
-  assert.deepEqual(events, [{ type: 'rendered', revision: 2, imagePath: '/tmp/new.png' }]);
+  assert.deepEqual(events, [{ type: 'rendered', revision: 2, imageUri: '/tmp/new.png' }]);
   c.dispose();
 });
 
@@ -73,7 +73,7 @@ test('a render superseded before it starts never runs twice and late errors are 
   await flush();
   rejectFirst(new PreviewInvalidError('stale failure'));
   await flush();
-  assert.deepEqual(events, [{ type: 'rendered', revision: 2, imagePath: '/tmp/ok.png' }]);
+  assert.deepEqual(events, [{ type: 'rendered', revision: 2, imageUri: '/tmp/ok.png' }]);
   c.dispose();
 });
 

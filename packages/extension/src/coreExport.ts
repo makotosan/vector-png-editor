@@ -1,145 +1,52 @@
-// Production export dependencies (Issue #47).
+// Production export dependencies (Issue #47; TS Core switch in
+// Issues #58 and #59).
 //
-// `build` reuses the bridge protocol-1 runner exactly like the save
-// path (coreSave.ts). `validate --profile` and `convert` cannot be
-// expressed over that transport - the protocol accepts neither a
-// profile gate nor a normalization report path - so they run through
-// the Core's versioned JSON CLI with a bounded, shell-free spawn that
-// mirrors the bridge's discipline (output caps, timeout, process-tree
-// kill, envelope validation). No Python Core changes were needed.
-import { spawn, execFile } from 'node:child_process';
+// Every route now runs in-process through the TypeScript Core
+// (packages/ts-core); no editor feature needs a Python environment
+// any more. `validate --profile` is checkProfile with strict
+// structure - exactly what the Core CLI's `validate --profile
+// safe-svg-v1` computed - and `build` is the shared tsCore
+// build/publish path. `convert` is the normalization route:
+// ts-core's normalizeDocument (the gated normalization port) feeds
+// its output to the same build path and publishes with the Core's
+// no-clobber discipline; the move-aside/restore-on-failure handling
+// of a pre-existing target lives in the orchestration (export.ts),
+// unchanged.
 import { createHash } from 'node:crypto';
-import { access, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { runCore, BridgeError } from '../../bridge/src/core.ts';
+import { TsCoreError } from '../../ts-core/src/errors.ts';
+import {
+  normalizeDocument,
+  type ConversionReport,
+} from '../../ts-core/src/normalize.ts';
+import { checkProfile } from '../../ts-core/src/validate.ts';
 import type { BuildOutcome } from './save.ts';
 import {
-  ExportCoreError, ExportUnavailableError,
-  type ConvertOutcome, type ProfileDiagnostic, type ProfileValidation,
+  ExportCoreError,
+  type ConvertOutcome, type ProfileValidation,
 } from './export.ts';
 import type { ExportPngDeps, PlainPngRenderOutcome } from './exportPng.ts';
-
-const PYTHON_HINT = 'Export needs the Python Core: run the command “Vector PNG: Set Up Python Environment” or set "vectorPng.corePythonPath" to a Python 3.11-3.13 with the Core installed. Nothing was written.';
-
-type CliEnvelope = {
-  protocol: 1;
-  command: string;
-  ok: boolean;
-  result?: Record<string, unknown>;
-  error?: { code: string; message: string; details?: Record<string, unknown> };
-};
-
-const MAX_STDOUT = 4_194_304;
-const MAX_STDERR = 65_536;
-const TIMEOUT_MS = 120_000;
-
-function killTree(child: ReturnType<typeof spawn>): void {
-  if (!child.pid) return;
-  if (process.platform === 'win32') {
-    execFile(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe'),
-      ['/PID', String(child.pid), '/T', '/F'], { windowsHide: true, timeout: 5000, maxBuffer: 32_768 },
-      () => { if (child.exitCode === null) child.kill(); });
-  } else {
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { child.kill('SIGKILL'); }
-  }
-}
-
-// Runs one Core CLI command and returns its parsed JSON envelope. A
-// non-zero exit is a normal Core answer (the envelope carries the
-// error), never an exception; only launch/timeout/limit/protocol
-// failures throw ExportCoreError.
-export function runCoreCli(python: string, args: string[]): Promise<CliEnvelope> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(python, ['-m', 'vector_png_editor', ...args], {
-      shell: false, windowsHide: true,
-      detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout: Buffer[] = [], stderrBytes = 0, outBytes = 0;
-    let failure: ExportCoreError | undefined, finished = false;
-    const stop = (error: ExportCoreError) => {
-      if (finished || failure) return;
-      failure = error;
-      killTree(child);
-    };
-    const timer = setTimeout(() => stop(new ExportCoreError('timeout', 'The Core request timed out')), TIMEOUT_MS);
-    const cleanup = () => { finished = true; clearTimeout(timer); };
-    child.on('error', (error) => {
-      cleanup();
-      reject(new ExportCoreError('launch-failed', `Could not start the Python Core: ${error.message}`));
-    });
-    child.stdout.on('data', (data: Buffer) => {
-      outBytes += data.length;
-      if (outBytes > MAX_STDOUT) stop(new ExportCoreError('output-limit', 'Core output exceeds the limit'));
-      else if (!failure) stdout.push(data);
-    });
-    child.stderr.on('data', (data: Buffer) => {
-      stderrBytes += data.length;
-      if (stderrBytes > MAX_STDERR) stop(new ExportCoreError('output-limit', 'Core stderr exceeds the limit'));
-    });
-    child.on('close', () => {
-      cleanup();
-      if (failure) { reject(failure); return; }
-      try {
-        const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(stdout))) as Partial<CliEnvelope>;
-        if (value.protocol !== 1 || typeof value.ok !== 'boolean')
-          throw new Error('unexpected envelope');
-        resolve(value as CliEnvelope);
-      } catch {
-        reject(new ExportCoreError('protocol-error', 'The Core returned an unreadable response'));
-      }
-      stdout = [];
-    });
-  });
-}
-
-function parseDiagnostics(details: Record<string, unknown> | undefined): ProfileDiagnostic[] {
-  const list = details?.diagnostics;
-  if (!Array.isArray(list)) return [];
-  const text = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-  const num = (value: unknown): number | null => (typeof value === 'number' && Number.isFinite(value) ? value : null);
-  return list.filter((d): d is Record<string, unknown> => typeof d === 'object' && d !== null).map((d) => ({
-    severity: text(d.severity) ?? 'error',
-    code: text(d.code) ?? 'unknown',
-    element: text(d.element),
-    attribute: text(d.attribute),
-    line: num(d.line),
-    column: num(d.column),
-    message: text(d.message) ?? 'Profile diagnostic',
-    suggestion: text(d.suggestion),
-  }));
-}
+import { buildToFile, buildVectorPngBytes, publishBytes, type TsCoreRuntime } from './tsCore.ts';
 
 // Human-readable warnings from a conversion report: every recorded
 // accessibility loss, plus any report warning that is not the generic
 // pointer at those losses.
-export function warningsFromReport(report: Record<string, unknown> | undefined): string[] {
+export function warningsFromReport(report: ConversionReport | undefined): string[] {
   if (!report) return [];
   const warnings: string[] = [];
-  const accessibility = report.accessibility;
-  if (Array.isArray(accessibility)) {
-    for (const entry of accessibility) {
-      if (typeof entry !== 'object' || entry === null) continue;
-      const record = entry as Record<string, unknown>;
-      if (typeof record.loss !== 'string') continue;
-      const attribute = typeof record.attribute === 'string' ? record.attribute : 'attribute';
-      const value = typeof record.value === 'string' ? ` "${record.value}"` : '';
-      warnings.push(`Accessibility: ${attribute}${value} could not be preserved (${record.loss})`);
-    }
+  for (const record of report.accessibility) {
+    if (typeof record.loss !== 'string') continue;
+    const value = record.value ? ` "${record.value}"` : '';
+    warnings.push(`Accessibility: ${record.attribute}${value} could not be preserved (${record.loss})`);
   }
-  const listed = report.warnings;
-  if (Array.isArray(listed)) {
-    for (const entry of listed) {
-      if (typeof entry !== 'object' || entry === null) continue;
-      const record = entry as Record<string, unknown>;
-      if (record.code === 'accessibility-loss') continue; // detailed above
-      if (typeof record.explanation === 'string') warnings.push(record.explanation);
-    }
+  for (const record of report.warnings) {
+    if (record.code === 'accessibility-loss') continue; // detailed above
+    warnings.push(record.explanation);
   }
   return warnings;
 }
-
-let sequence = 0;
 
 // Runs `fn` in a fresh private temp directory and always removes it.
 export async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
@@ -161,68 +68,58 @@ export type CoreExportDeps = {
   removeFile: (path: string) => Promise<void>;
 };
 
-export function createCoreExportDeps(pythonPath: string | undefined): CoreExportDeps {
-  const requirePython = (): string => {
-    const python = pythonPath?.trim();
-    if (!python) throw new ExportUnavailableError(PYTHON_HINT);
-    return python;
-  };
+export function createCoreExportDeps(runtime: TsCoreRuntime): CoreExportDeps {
   return {
-    async validateProfile(source, width, height): Promise<ProfileValidation> {
-      const python = requirePython();
-      return withTempDir(async (dir) => {
-        const input = join(dir, 'input.svg');
-        await writeFile(input, source, 'utf8');
-        const envelope = await runCoreCli(python, [
-          '--request-id', `export-validate-${Date.now()}-${++sequence}`,
-          'validate', input, '--profile', 'safe-svg-v1',
-          '--width', String(width), '--height', String(height),
-        ]);
-        if (envelope.ok) return { valid: true };
-        if (envelope.error?.code === 'unsupported-profile')
-          return { valid: false, diagnostics: parseDiagnostics(envelope.error.details) };
-        throw new ExportCoreError(envelope.error?.code ?? 'unknown', envelope.error?.message ?? 'The Core rejected the source');
-      });
-    },
-    async build(request): Promise<BuildOutcome> {
-      const python = requirePython();
-      let response;
+    // The profile gate, in-process. Width/height never participated
+    // in the CLI's --profile verdict either (they only fed the
+    // separate validate_render path), so they are accepted for the
+    // deps contract and unused. An XML-level failure is a Core
+    // refusal, thrown as ExportCoreError exactly as the CLI's
+    // non-profile error was.
+    async validateProfile(source, _width, _height): Promise<ProfileValidation> {
+      let diagnostics;
       try {
-        response = await runCore(python, {
-          protocol: 1, command: 'build', request_id: `export-${Date.now()}-${++sequence}`,
-          source_base64: Buffer.from(request.source, 'utf8').toString('base64'),
-          output: request.output, width: request.width, height: request.height,
-          overwrite: request.expectedSha256 !== undefined, expected_sha256: request.expectedSha256,
-        });
+        diagnostics = checkProfile(Buffer.from(source, 'utf8'), { strictStructure: true });
       } catch (error) {
-        if (error instanceof BridgeError) return { ok: false, code: error.code, message: error.message };
+        if (error instanceof TsCoreError) throw new ExportCoreError(error.code, error.message);
         throw error;
       }
-      if (!response.response.ok)
-        return { ok: false, code: response.response.error?.code ?? 'unknown', message: response.response.error?.message ?? 'The Core rejected the export' };
-      const backup = response.response.result?.backup;
-      return { ok: true, backup: typeof backup === 'string' ? backup : null };
+      if (diagnostics.length === 0) return { valid: true };
+      return { valid: false, diagnostics };
     },
-    async convert(request): Promise<ConvertOutcome> {
-      const python = requirePython();
-      return withTempDir(async (dir) => {
-        const input = join(dir, 'input.svg');
-        const reportPath = join(dir, 'report.json');
-        await writeFile(input, request.source, 'utf8');
-        const envelope = await runCoreCli(python, [
-          '--request-id', `export-convert-${Date.now()}-${++sequence}`,
-          'convert', input, request.output, '--report', reportPath,
-        ]);
-        if (!envelope.ok)
-          return { ok: false, code: envelope.error?.code ?? 'unknown', message: envelope.error?.message ?? 'The Core conversion failed' };
-        let report: Record<string, unknown> | undefined;
-        try {
-          report = JSON.parse(await readFile(reportPath, 'utf8')) as Record<string, unknown>;
-        } catch {
-          report = envelope.result;
-        }
-        return { ok: true, warnings: warningsFromReport(report) };
+    async build(request): Promise<BuildOutcome> {
+      return buildToFile(runtime, {
+        sourceBase64: Buffer.from(request.source, 'utf8').toString('base64'),
+        output: request.output, width: request.width, height: request.height,
+        overwrite: request.expectedSha256 !== undefined, expectedSha256: request.expectedSha256,
       });
+    },
+    // The normalization route, in-process: normalize with the
+    // render gate, build a vector-png from the normalized source at
+    // the gate's viewport, and publish it without clobbering (the
+    // orchestration guarantees the target does not exist; a race
+    // still resolves as the Core's output-exists). Every refusal -
+    // normalization, build, publish - resolves as a failed outcome
+    // with the Core's code, as the CLI envelope did; filesystem
+    // failures resolve as 'io-error', the CLI's own mapping.
+    async convert(request): Promise<ConvertOutcome> {
+      try {
+        const { fonts, defaultFamily } = await runtime.fonts;
+        const { output, report } = await normalizeDocument(Buffer.from(request.source, 'utf8'), {
+          fonts, defaultFontFamily: defaultFamily, sansSerifFamily: defaultFamily,
+        });
+        const render = report.render;
+        if (render === null || typeof render !== 'object') {
+          throw new TsCoreError('render-failed', 'Normalization produced no render record');
+        }
+        const [width, height] = render.viewport;
+        const bytes = await buildVectorPngBytes(runtime, output, width, height);
+        await publishBytes(bytes, request.output, { overwrite: false });
+        return { ok: true, warnings: warningsFromReport(report) };
+      } catch (error) {
+        if (error instanceof TsCoreError) return { ok: false, code: error.code, message: error.message };
+        return { ok: false, code: 'io-error', message: error instanceof Error ? error.message : String(error) };
+      }
     },
     async sha256File(path: string): Promise<string> {
       const bytes = await readFile(path);
@@ -241,34 +138,36 @@ export function createCoreExportDeps(pythonPath: string | undefined): CoreExport
 }
 
 // Production rendering dependencies for the plain-PNG export
-// (Issue #45): the same Core validate/build/convert operations as
-// the vector-png export, but rendering into a private temp file and
-// resolving its bytes - the stripped raster is the only thing the
-// caller ever writes, and only where the user chose. The dialog and
-// the final write are the host's (see ExportPngDeps).
+// (Issue #45): the same validate/build/convert routes as the
+// vector-png export. The build route runs entirely in-process and
+// resolves the built bytes from memory - no temp file. The convert
+// route also runs in-process now; it still produces a temp
+// vector-png (in a private temp directory) whose bytes are then
+// resolved, because the raster is stripped from a built container.
+// Either way, the stripped raster is the only thing the caller ever
+// writes, and only where the user chose; the dialog and the final
+// write are the host's (see ExportPngDeps).
 export type CorePlainPngDeps = Pick<ExportPngDeps, 'validateProfile' | 'renderViaBuild' | 'renderViaConvert'>;
 
-export function createCorePlainPngDeps(pythonPath: string | undefined): CorePlainPngDeps {
-  const base = createCoreExportDeps(pythonPath);
-  const readRendered = async (outcome: { ok: true } | { ok: false; code: string; message: string }, output: string, warnings: string[]): Promise<PlainPngRenderOutcome> => {
-    if (!outcome.ok) return outcome;
-    return { ok: true, png: await readFile(output), warnings };
-  };
+export function createCorePlainPngDeps(runtime: TsCoreRuntime): CorePlainPngDeps {
+  const base = createCoreExportDeps(runtime);
   return {
     validateProfile: base.validateProfile,
     async renderViaBuild(source, width, height): Promise<PlainPngRenderOutcome> {
-      return withTempDir(async (dir) => {
-        const output = join(dir, 'render.png');
-        const outcome = await base.build({ source, output, width, height });
-        return readRendered(outcome, output, []);
-      });
+      try {
+        const png = await buildVectorPngBytes(runtime, Buffer.from(source, 'utf8'), width, height);
+        return { ok: true, png, warnings: [] };
+      } catch (error) {
+        if (error instanceof TsCoreError) return { ok: false, code: error.code, message: error.message };
+        return { ok: false, code: 'io-error', message: error instanceof Error ? error.message : String(error) };
+      }
     },
     async renderViaConvert(source): Promise<PlainPngRenderOutcome> {
       return withTempDir(async (dir) => {
         const output = join(dir, 'render.png');
         const outcome = await base.convert({ source, output });
         if (!outcome.ok) return outcome;
-        return readRendered({ ok: true }, output, outcome.warnings);
+        return { ok: true, png: await readFile(output), warnings: outcome.warnings };
       });
     },
   };

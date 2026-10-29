@@ -1,0 +1,281 @@
+# TypeScript Core (ts-core)
+
+The TypeScript Core for vector-png-editor: the migration target
+that replaced the Python Core and its CairoSVG rendering stack
+(Issues #58 and #61; the go decision and its evidence are in
+Issue #57). The Python Core and its CLI were retired in Phase 3
+(Issue #60); this package is now the only Core.
+
+Ported so far: the renderer, the PNG container, safe-svg-v1
+validation, and svg-normalization-v1 (Phase 2, Issue #59) - and
+the extension integration (Issues #58 and #59): the extension's
+open/inspect, edited previews, save, export build/validate paths
+and the Normalize SVG / convert paths run on this package
+in-process, with the extension owning file publication policy
+(its src/tsCore.ts mirrors the retired Python Core's writing.py
+discipline). No editor feature uses the Python Core.
+Not yet ported: the standalone verify path (render + pixel
+comparison).
+
+## Contents
+
+- `src/render.ts` — `renderSvgToPng(source, { width, height, fonts })`:
+  renders an SVG source to PNG bytes with @resvg/resvg-wasm,
+  mirroring the Issue #57 spike's setup (font buffers per
+  construction, system fonts off, "Noto Sans" family defaults,
+  transparent background, matching the Core's Cairo gate path).
+  A host whose module layout cannot resolve the wasm package from
+  here (the bundled extension) supplies the binary once with
+  `setWasmSource(path | bytes)` before the first render.
+- `src/fonts.ts` — font ingestion: font files, with caller-stated
+  family/style/weight, become the `FontBuffer` list the renderer
+  consumes. Which fonts are supplied decides text rendering, so
+  the choice is explicit and shared by tests and integration.
+- `src/container.ts` — the PNG container, mirroring the Python
+  Core's `document.py` (and the build assembly of `writing.py`):
+  `parseChunks` (liberal chunk walking with CRC verification),
+  `parseDocument` (full passive validation; the embedded source is
+  XML-checked but not profile-checked, so a profile-unsafe source
+  still extracts), `inspectDocument` (the Core's report shape),
+  `extractSource` (byte-exact), `assembleVectorPng` (the build
+  candidate's chunk layout: raster chunks only, source iTXt
+  directly after IHDR), and `rebuildVectorPng` (the same assembly
+  preserving the original iTXt payload verbatim — byte-exact for
+  files the Core built).
+- `src/validate.ts` — safe-svg-v1 validation mirroring the Core's
+  two surfaces: `validateSource` (the accept/reject verdict;
+  profile rejections throw `unsupported-profile` with the backend's
+  first-error message) and `checkProfile` (every violation as a
+  diagnostic with code/element/attribute/line/column/message/
+  suggestion, optionally with the schema content models enforced).
+- `src/normalize.ts` — the svg-normalization-v1 normalizer,
+  mirroring `normalize.py` behaviour-for-behaviour:
+  `normalizeStructure(source)` (hardened parse, the closed CSS
+  subset with amendments G1 letter-spacing and G3 font-family,
+  cascade materialization, section 3.1 marker expansion including
+  G2 curved C-segment hosts, accessibility migration with its
+  recorded losses, v1 revalidation of the result, and the section
+  7 conversion report in the Python report's shape and vocabulary)
+  and `normalizeDocument(source, { fonts, ... })` (the gated entry
+  point: the before/after render gate below, then the completed
+  report; refusals throw `NormalizeRejection` carrying the failure
+  report, mirroring the CoreError + details shape). The output is
+  byte-identical to the Python normalizer's for the same input.
+- `src/dom.ts` — the ElementTree-shaped DOM the normalizer stands
+  on: a second pass over the shared scanner producing mutable
+  elements with insertion-ordered attributes and text/tail
+  content, plus an `ET.tostring`-exact serializer (xmlns declared
+  first on the root, ` />` empty-element form, ElementTree's
+  escaping rules). The normalizer's hardened preflight differs
+  from validation's (its own failure codes and stage vocabulary),
+  so it has its own entry points here.
+- `src/pngPixels.ts` — a PNG pixel decoder (`decodePngRgba`,
+  `rgbaEqual`) for the render gate's exact RGBA comparison:
+  chunk walking and bounded inflate are reused from the container
+  and zlib modules; unfiltering and color conversion are done
+  here (8-bit fully, 16-bit by high byte, sub-byte gray/palette
+  scaled; interlace refused — neither engine emits it).
+- `src/xml.ts` — the bounded XML parser both of the above stand
+  on, mirroring `svg.py`'s two layers (an expat-style pass applying
+  the limits and prohibitions in document order, then namespace
+  expansion and the SVG-root check). It is purpose-built because
+  the repo has no XML parser and parity with expat's positions
+  (line/column in code points from each start tag's `<`; a BOM
+  counts as one column) is a property of that specific behaviour.
+- `src/zlib.ts` — CRC-32 and bounded inflate with the Core's exact
+  stream-end semantics rebuilt on Node's zlib (see below).
+- `src/errors.ts` — `TsCoreError` (`code` + message), mirroring
+  the Python Core's `CoreError` shape. Container/validation codes
+  are the Core's own: `invalid-container`, `invalid-svg`,
+  `unsupported-profile`, `resource-limit`, `ordinary-png`.
+
+## Parity with the Python Core (historical record)
+
+While the Python Core existed, a live cross-check harness
+(`tests/parity.test.mjs` + `tests/parity_driver.py`) ran both
+implementations over the same corpora and diffed verdicts, error
+codes, error messages and full diagnostic lists: 141 SVG cases
+(the pinned catalog sources, the nine corpus SVGs, the 27
+normalization catalog inputs, the nameplate pair, the Python
+tests' own cases, and crafted edge cases for namespaces,
+declarations, references, positions and traversal order) and
+60 PNG cases (the 21 pinned catalog fixtures plus constructed
+structural mutations), plus a Python-built file whose TS rebuild
+had to be byte-identical. All agreed; the only tolerated
+difference was message text where the Python side embedded
+CPython's zlib / codec error strings (e.g. "Error -3 while
+decompressing data…") — the TS side reports the Core's fixed
+message for the same condition, and the code always matched.
+The normalization cross-check compared 48 cases — the 27-case
+catalog, the nameplate input/expected pair, the nine corpus
+SVGs and crafted edge cases — with total structure-level
+agreement (see "The render gate" below for the gated part).
+
+**The harness was removed in Phase 3 (Issue #60), together with
+the Python Core it compared against.** Its reference
+implementation no longer exists, so the live comparison cannot
+run any more; the pure-TS suites, which encode the Python test
+suites' expectations as baked fixtures, are the standing
+coverage. The results above are the recorded evidence at
+retirement time, not a check that still runs.
+
+Two findings from the port, recorded plainly:
+
+- **Validation has no canonical serialization to mirror.** The
+  Core's validation path reserializes nothing (rendering.py: "no
+  source reserialization"); `build` embeds the source bytes as
+  supplied and `extract` returns them byte-exact. The only
+  canonicalizer in the Core is the normalizer — ported in
+  Issue #59 as `src/normalize.ts` over `src/dom.ts`.
+- **Fresh compression is not byte-identical across platforms.**
+  Node's bundled zlib (1.3.2.1-motley) and CPython's zlib (1.3)
+  make different match choices on some inputs (measured: the same
+  SVG source compresses to 89 vs 88 bytes). `assembleVectorPng`
+  therefore produces a valid vector-png whose source round-trips
+  byte-exactly but whose file bytes can differ from a Python
+  build's in the iTXt payload; `rebuildVectorPng` preserves the
+  original payload and is byte-exact.
+
+## Behaviour enforced before rendering
+
+resvg alone provides neither of these, so the renderer adds both:
+
+- **Resource caps** (code `resource-limit`, the Core's own code and
+  message): integer sides, each side within 1..4096, and
+  width × height ≤ 4,000,000 — the caps of the Python Core's
+  `render_source` / `normalize._viewport`. resvg itself enforces
+  no limits.
+- **External references** (code `external-reference`): any
+  `href` / `xlink:href` not starting with `#`, and any `url(...)`
+  that is not a local fragment, is rejected before the engine sees
+  the source. This matches the Cairo path's deny-fetch behaviour;
+  resvg would otherwise drop the reference *silently*. The scan is
+  a conservative raw-source scan (attributes and style content
+  alike; reference-shaped text in comments or text content is
+  flagged too). The one exception is the normalization gate
+  (`skipExternalReferenceScan`): its inputs have already passed
+  the normalizer's section 2 inspection, which refuses every real
+  external reference, so the scan would only add false refusals
+  on reference-shaped text content.
+
+The requested size must be the document's own viewport: resvg
+scales uniformly (the size is applied as fitTo width), so a
+request with a different aspect is refused with `render-failed`
+rather than silently stretched. Engine failures also surface as
+`render-failed`.
+
+## The render gate on resvg (Issue #59)
+
+The normalizer's before/after gate renders the original and the
+normalized source with the SAME font set and requires exact RGBA
+equality of the two renders — the Python gate's rule, applied
+within resvg instead of within CairoSVG. Cross-engine comparison
+is meaningless and is not attempted. The report's render block
+names this engine (`@resvg/resvg-wasm`, version `2.6.2`); those
+fields, and `color_alpha` / `text_policy`, are engine-specific
+by construction and were excluded from the cross-check's report
+comparison (the shared fields — fonts, background,
+resource_policy, comparison, tolerances, viewport — had to agree).
+
+### The before-image accommodation (option A)
+
+resvg cannot render every form an input may take, where
+CairoSVG can, in two construct classes:
+
+- **CSS geometry properties.** Measured on resvg 2.6.2
+  (attribute form vs stylesheet-rule form vs style-attribute
+  form, per element): EVERY SVG2 geometry property is ignored
+  in CSS — `x`, `y`, `width`, `height`, `rx`, `ry` on `rect`;
+  `cx`, `cy`, `r` on `circle`; `cx`, `cy`, `rx`, `ry` on
+  `ellipse` — the presentation attribute stands even when a
+  rule contradicts it, while paint properties in CSS are
+  honored. A raw before-image therefore shows square corners
+  where the materialized output (attributes) rounds them.
+- **Native markers.** resvg rasterizes a native marker and the
+  profile's expanded `<g>` clone with slightly different
+  antialiasing (edge deltas up to ~46/255 on the iso7010
+  arrowheads), and it does not paint native markers at all on
+  `stroke="none"` hosts, where CairoSVG paints them — so a raw
+  before-image differs from the clone-painting output wherever
+  a marker sits on such a host.
+
+With a raw before-image, the resvg gate refused 10 of the 48
+cross-check cases the Python gate passes — every one with
+byte-identical structure output, i.e. the transformation was
+provably render-preserving and only the before-image was
+unrenderable in this engine. By the user-approved
+accommodation (decision recorded 2026-10-29, option A), the
+gate's BEFORE image is rendered from an accommodated copy of
+the input (`gateInputText` in `src/normalize.ts`), built with
+exactly two accommodations and nothing else:
+
+1. For each element, each geometry property whose cascaded
+   winning value comes from CSS (a style rule or a style
+   attribute) is also set as the element's attribute, computed
+   by the transformation's own cascade. (Within the profile's
+   closed CSS subset only `rx`/`ry` can ever be cascaded — the
+   other geometry properties are rejected as unsupported CSS
+   before any gate runs — so those are the only properties
+   this fires on today; the measured set is recorded in full
+   because it is the engine fact.)
+2. Markers are expanded by the transformation's own section
+   3.1 code path (G2 curved-host tangents included), and
+   `marker-end` is consumed from the gate input's CSS as
+   well, so both sides render markers as the same expanded
+   clones and no native marker paints beside its clone.
+
+The transformation itself is unchanged — its output is never
+adjusted to suit one renderer — and the comparison is
+unchanged: the accommodated input and the normalized output
+are two different source forms and must render exactly equal,
+and a hand-broken output still fails the gate (the
+negative-control test). The narrowing is honest and bounded:
+for the two accommodated classes, the gate no longer
+independently proves that CSS-to-attribute materialization
+and marker expansion preserve rendering; that fidelity was
+established by the structure cross-check against the Python
+Core (byte-identical outputs and reports on the whole corpus)
+and is now held by the baked structure expectations in the
+pure-TS suites. Everything else — paint and all other CSS,
+which stays in CSS form in the before-image — is still
+compared across forms by the gate itself.
+
+Result at the time: on the 48-case cross-check corpus the two
+gates' verdicts agreed on all 48 cases (structure and gate),
+and all nine corpus SVGs pass the TS normalization end to end.
+The divergence tag table that enforced this (`KNOWN_GATE_DIVERGENCES`)
+was retired with the parity harness; the gate-accommodation
+tests in `tests/normalize.test.mjs` are the standing coverage.
+
+## Tests
+
+```sh
+npm install
+npm test
+```
+
+The renderer suite runs the real engine (never mocked): all nine
+corpus SVGs from the workspace render at the dimensions recorded
+by the Issue #57 spike, the alpha properties hold exactly
+(transparent stays (0,0,0,0); `fill-opacity` 0.5 yields alpha
+128), the caps and external-reference rejections fire, and local
+`url(#id)` references render. Renderer-conformance
+re-verification against Cairo (pixel comparison, golden
+regeneration) is deferred by decision and is not part of this
+suite.
+
+The normalizer suite (`tests/normalize.test.mjs`) runs without
+Python: the 27-case catalog's verdicts and codes, the nameplate
+golden output and report, the Python suite's cascade / CSS
+rejection / marker geometry / accessibility / resource-limit
+expectations baked in, the gated entry point on resvg, the
+gate-accommodation tests (a positive case per construct class,
+the `gateInputText` shape test, a render-gate negative
+control), the `stroke="none"` decision tests, and — when the
+workspace corpus is present — an end-to-end gated run of all
+nine corpus SVGs.
+
+Note: `node_modules` includes the resvg wasm asset (~2.5 MB);
+resvg is MPL-2.0 and is listed, with the wasm note, in the
+repository-root `THIRD_PARTY_NOTICES.md` (a guard test in this
+suite checks the entry names the pinned version).

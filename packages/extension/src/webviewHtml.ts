@@ -15,8 +15,8 @@ export function cspFor(assets: WebviewAssets): string {
   return [
     `default-src 'none'`,
     `connect-src 'none'`,
-    `img-src ${assets.cspSource}`,
-    `font-src ${assets.cspSource}`,
+    `img-src ${assets.cspSource} data: blob:`,
+    `font-src ${assets.cspSource} data:`,
     // Monaco injects its own styles at runtime; scripts stay nonce-bound
     // and limited to packaged resources.
     `style-src ${assets.cspSource} 'unsafe-inline'`,
@@ -42,6 +42,7 @@ export function buildEditorHtml(assets: WebviewAssets): string {
       <button id="tool-save" type="button">Save</button>
       <button id="tool-format" type="button">Format</button>
       <button id="tool-wrap" type="button" aria-pressed="false" title="Toggle word wrap (Alt+Z)">Wrap</button>
+      <button id="tool-copy" type="button">Copy SVG</button>
       <span id="meta">Loading…</span>
     </div>
     <div id="editor"></div>
@@ -68,8 +69,8 @@ export function buildEditorHtml(assets: WebviewAssets): string {
     </div>
     <div id="preview-mode-row">
       <div id="preview-toggle" role="group" aria-label="Preview source">
-        <button id="show-saved" type="button">Saved</button>
-        <button id="show-edited" type="button">Edited</button>
+        <button id="show-saved" type="button">PNG</button>
+        <button id="show-edited" type="button">Editing</button>
       </div>
       <div id="preview-status"></div>
     </div>
@@ -77,9 +78,12 @@ export function buildEditorHtml(assets: WebviewAssets): string {
       <img id="preview" alt="PNG preview">
     </div>
     <div id="preview-actions">
-      <button id="action-copy" type="button">Copy</button>
-      <button id="action-export" type="button">Export</button>
-      <button id="action-export-png" type="button">Export PNG</button>
+      <button id="action-export" type="button">Export SVG</button>
+      <button id="action-export-png" type="button">Export Plain PNG</button>
+    </div>
+    <div id="preview-actions-svg" hidden>
+      <button id="action-normalize" type="button">Normalize SVG</button>
+      <button id="action-export-vector-png" type="button">Export as Vector PNG</button>
     </div>
   </div>
 </div>

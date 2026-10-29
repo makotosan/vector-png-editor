@@ -13,13 +13,15 @@ export class PreviewUnavailableError extends Error {}
 export class PreviewStaleError extends Error {}
 
 export type PreviewEvent =
-  | { type: 'rendered'; revision: number; imagePath: string }
+  | { type: 'rendered'; revision: number; imageUri: string }
   | { type: 'invalid'; revision: number; message: string }
   | { type: 'unavailable'; revision: number; message: string };
 
-// Renders one source revision to a PNG file and returns its path. Must
-// reject with PreviewInvalidError when the source fails validation and
-// with PreviewUnavailableError when no renderer is configured.
+// Renders one source revision and returns the PNG as a data URI
+// (Issue #58: previews are produced in-process and never travel as
+// files). Must reject with PreviewInvalidError when the source fails
+// validation and with PreviewUnavailableError when the rendering
+// environment itself is unavailable.
 export type PreviewRenderer = (source: string, revision: number) => Promise<string>;
 
 type Timers = {
@@ -64,9 +66,9 @@ export class PreviewController {
   }
 
   private async run(generation: number, source: string, revision: number): Promise<void> {
-    let imagePath: string;
+    let imageUri: string;
     try {
-      imagePath = await this.renderer(source, revision);
+      imageUri = await this.renderer(source, revision);
     } catch (error) {
       if (this.disposed || generation !== this.generation || error instanceof PreviewStaleError) return;
       if (error instanceof PreviewInvalidError)
@@ -79,7 +81,7 @@ export class PreviewController {
     }
     // A newer edit was scheduled while this render ran: discard the result.
     if (this.disposed || generation !== this.generation) return;
-    this.emit({ type: 'rendered', revision, imagePath });
+    this.emit({ type: 'rendered', revision, imageUri });
   }
 
   dispose(): void {

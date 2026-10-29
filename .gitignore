@@ -14,3 +14,5 @@ packages/extension/out/
 # Generated Monaco bundle (copied from the pinned npm package)
 packages/extension/media/monaco/
 packages/extension/media/schemas/
+# Generated resvg WASM copy (from the ts-core package's dependency)
+packages/extension/media/resvg/

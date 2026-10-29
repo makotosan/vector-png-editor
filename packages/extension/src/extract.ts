@@ -1,12 +1,15 @@
-import { inflateSync } from 'node:zlib';
-import { walkChunks } from './png.ts';
-import { SOURCE_KEYWORD } from './detect.ts';
+import { extractSource as extractCoreSource } from '../../ts-core/src/container.ts';
 import { MAX_SVG_BYTES } from './profile.ts';
 
-// Exact source extraction for the editor. Unlike routing detection, opening
-// a document decompresses the iTXt payload - with a hard output bound - and
-// preserves the source bytes exactly (BOM and newlines included). The text
-// is data for the editor model only; it is never inserted into a DOM.
+// Exact source extraction for the editor, delegated to the
+// TypeScript Core's container (packages/ts-core): its read performs
+// the Core's full passive validation - chunk structure, the single
+// compressed iTXt source chunk, bounded decompression, and the
+// bounded XML well-formedness check the Core applies during
+// discovery (profile acceptance is validation's job, not the
+// container's, exactly as in the Core). The extraction preserves
+// the source bytes exactly (BOM and newlines included); the text is
+// data for the editor model only and is never inserted into a DOM.
 export type ExtractedSource = {
   sourceBytes: Uint8Array;
   text: string;
@@ -17,21 +20,13 @@ export type ExtractedSource = {
 export class ExtractError extends Error {}
 
 export function extractSource(bytes: Uint8Array, maxSvgBytes: number = MAX_SVG_BYTES): ExtractedSource {
-  const walk = walkChunks(bytes);
-  if (!walk.ok) throw new ExtractError(`Invalid PNG container: ${walk.reason}`);
-  const sources = walk.chunks.filter(c => c.type === 'iTXt'
-    && new TextDecoder('latin1').decode(c.data.subarray(0, c.data.indexOf(0))) === SOURCE_KEYWORD);
-  if (sources.length !== 1) throw new ExtractError(`Expected exactly one ${SOURCE_KEYWORD} source chunk, found ${sources.length}`);
-  const data = sources[0].data;
-  const payloadStart = SOURCE_KEYWORD.length + 1 + 2 + 1 + 1;
-  let raw: Buffer;
+  let sourceBytes: Uint8Array;
   try {
-    raw = inflateSync(data.subarray(payloadStart), { maxOutputLength: maxSvgBytes + 1 });
-  } catch {
-    throw new ExtractError('SVG source is not a valid compressed iTXt payload');
+    sourceBytes = extractCoreSource(bytes);
+  } catch (error) {
+    throw new ExtractError(error instanceof Error ? error.message : String(error));
   }
-  if (raw.length > maxSvgBytes) throw new ExtractError(`SVG source exceeds ${maxSvgBytes} bytes`);
-  const sourceBytes = new Uint8Array(raw);
+  if (sourceBytes.length > maxSvgBytes) throw new ExtractError(`SVG source exceeds ${maxSvgBytes} bytes`);
   let text: string;
   try {
     text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(sourceBytes);

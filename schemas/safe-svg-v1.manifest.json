@@ -13,7 +13,7 @@
   "artifacts": {
     "safe-svg-v1.monaco.json": "9ff166650eed583daf15ca84189b6b7cca3b1a724110be2ad16687b0f9696a1e",
     "safe-svg-v1.rng": "3edc780fc0d0feb895427444adea23653c41a6995893b25ea771c31bd1d349bb",
-    "safe-svg-v1.rules.md": "45b6d87b1782c2ff8f110ee90cc680b34973f611aae9a16fbe9ff7b32dfa5485"
+    "safe-svg-v1.rules.md": "8124b54844d57631cb2b1af8105763849e1990def4fbf0570ae3c09e16c8fc1a"
   },
   "generator": "tools/generate_safe_svg_schemas.py"
 }

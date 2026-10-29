@@ -1,7 +1,8 @@
 name: Release
 
-# Cut a release by pushing a version tag, e.g. v0.1.0.dev3.
-# The tag must agree with packages/core/pyproject.toml (checked by
+# Cut a release by pushing a version tag, e.g. v0.1.0-dev3.
+# The tag must agree with the extension package version in
+# packages/extension/package.json (checked by
 # tools/check_versions.py). Prerelease tags (dev/a/b/rc) publish a
 # GitHub prerelease and are never marked stable; a stable tag may
 # only be cut after the real-machine acceptance (Issue #18) is done.
@@ -12,7 +13,6 @@ on:
 
 permissions:
   contents: write # create the GitHub Release
-  id-token: write # PyPI trusted publishing, only when enabled below
 
 jobs:
   release:
@@ -29,21 +29,11 @@ jobs:
       - name: Verify tag and package versions agree
         run: python tools/check_versions.py --tag "$GITHUB_REF_NAME"
 
-      - name: Test and build the Core wheel and sdist
+      - name: Test the TypeScript Core
+        working-directory: packages/ts-core
         run: |
-          python -m pip install --upgrade pip build
-          python -m pip install './packages/core[test]'
-          python -m pytest packages/core/tests -q
-          python -m build packages/core --outdir dist
-
-      - name: Clean-install the built wheel and smoke-test the CLI
-        run: |
-          python -m venv /tmp/clean-install
-          /tmp/clean-install/bin/python -m pip install dist/*.whl
-          cd /tmp
-          /tmp/clean-install/bin/vector-png-editor --help > /dev/null
-          printf '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="#333"/></svg>' > smoke.svg
-          /tmp/clean-install/bin/vector-png-editor validate smoke.svg --profile safe-svg-v1 --syntax-only
+          npm install --ignore-scripts --no-audit --no-fund
+          npm test
 
       - name: Test and package the extension VSIX
         working-directory: packages/extension
@@ -59,10 +49,8 @@ jobs:
       - name: Collect release assets with notices and checksums
         run: |
           cp THIRD_PARTY_NOTICES.md dist/
-          mkdir dist-pypi
-          cp dist/*.whl dist/*.tar.gz dist-pypi/
           cd dist
-          sha256sum *.whl *.tar.gz *.vsix THIRD_PARTY_NOTICES.md > SHA256SUMS.txt
+          sha256sum *.vsix THIRD_PARTY_NOTICES.md > SHA256SUMS.txt
 
       - name: Create the GitHub Release
         env:
@@ -72,20 +60,6 @@ jobs:
           case "$GITHUB_REF_NAME" in
             *.dev*|*a[0-9]*|*b[0-9]*|*rc[0-9]*) PRERELEASE="--prerelease" ;;
           esac
-          gh release create "$GITHUB_REF_NAME" dist/*.whl dist/*.tar.gz dist/*.vsix dist/SHA256SUMS.txt dist/THIRD_PARTY_NOTICES.md \
+          gh release create "$GITHUB_REF_NAME" dist/*.vsix dist/SHA256SUMS.txt dist/THIRD_PARTY_NOTICES.md \
             --title "vector-png-editor $GITHUB_REF_NAME" \
             --generate-notes $PRERELEASE
-
-      # Optional: publish the wheel/sdist to PyPI via trusted
-      # publishing. Enable by setting the repository variable
-      # PYPI_PUBLISH_ENABLED=true and configuring the trusted
-      # publisher on PyPI. When disabled, the GitHub Release above is
-      # the complete distribution and this step is skipped (the run
-      # summary says so). When enabled and publishing fails, the job
-      # fails and the failure is visible on the run and the tag.
-      - name: Publish to PyPI (only when configured)
-        if: vars.PYPI_PUBLISH_ENABLED == 'true'
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist-pypi
-          skip-existing: false

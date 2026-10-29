@@ -11,6 +11,8 @@ test('CSP blocks network and limits scripts to nonce plus packaged resources', (
   assert.match(csp, /connect-src 'none'/);
   assert.match(csp, /script-src 'nonce-abc123' https:\/\/webview\.example/);
   assert.match(csp, /worker-src https:\/\/webview\.example blob:/);
+  assert.match(csp, /font-src https:\/\/webview\.example data:/,
+    'Monaco loads its codicon font from an inlined data: URI; without it the folding chevrons are invisible');
 });
 
 test('HTML shell contains no user SVG and loads only local assets', () => {
@@ -72,8 +74,9 @@ test('word wrap toggles via the host command message and the Wrap button, persis
 test('preview pane hides the image instead of a broken icon while the edited render is missing (Issue #45)', async () => {
   const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
   assert.match(js, /img\.removeAttribute\('src'\);\n    img\.style\.display = 'none';/);
-  assert.match(js, /previewState\.editedRevision < revision \? 'Rendering the edited preview…' : ''/);
-  assert.match(js, /'No edited preview yet\.'/);
+  assert.match(js, /previewState\.editedUri && previewState\.editedRevision >= revision\n      \? ''\n      : 'Rendering the editing preview…'/,
+    'a missing or stale render reads as generating, never as absent');
+  assert.doesNotMatch(js, /No editing preview yet/, 'the not-generated-yet state is a generating message (user request, 2026-10-29)');
 });
 
 test('Toggle Word Wrap is a workbench command with an Alt+Z keybinding (Issue #45)', async () => {
@@ -100,7 +103,7 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
     'fill-row', 'fill-swatch', 'fill-text', 'fill-apply',
     'background-row', 'background-swatch', 'background-text',
     'preview-toggle', 'show-saved', 'show-edited', 'preview-status',
-    'preview-area', 'preview', 'preview-actions', 'action-copy', 'action-export', 'action-export-png'])
+    'preview-area', 'preview', 'preview-actions', 'action-export', 'action-export-png', 'tool-copy'])
     assert.ok(html.includes(`id="${id}"`), `missing #${id}`);
   assert.match(html, /id="tool-save" type="button">Save</);
   assert.match(html, /id="tool-format" type="button">Format</);
@@ -111,11 +114,12 @@ test('editor HTML (Issue #45) has the code toolbar and the Preview panel structu
   assert.match(html, /id="fill-swatch" type="color"/);
   assert.match(html, /id="background-swatch" type="color"/);
   assert.match(html, /id="fill-apply" type="button">Apply</);
-  assert.match(html, /id="show-saved" type="button">Saved</);
-  assert.match(html, /id="show-edited" type="button">Edited</);
-  assert.match(html, /id="action-copy" type="button">Copy</);
-  assert.match(html, /id="action-export" type="button">Export</);
-  assert.match(html, /id="action-export-png" type="button">Export PNG</);
+  assert.match(html, /id="show-saved" type="button">PNG</);
+  assert.match(html, /id="show-edited" type="button">Editing</);
+  assert.match(html, /id="tool-copy" type="button">Copy SVG</);
+  assert.doesNotMatch(html, /action-copy/, 'Copy SVG lives in the code toolbar, not the preview panel');
+  assert.match(html, /id="action-export" type="button">Export SVG</);
+  assert.match(html, /id="action-export-png" type="button">Export Plain PNG</);
   assert.match(html, /aria-pressed="true"/, 'one background preset starts pressed');
   assert.ok(!html.includes('<svg'), 'no SVG markup is ever placed in the DOM');
 });
@@ -131,9 +135,66 @@ test('editor CSS follows the VS Code theme variables with design-B dark fallback
     assert.ok(css.includes(fallback), `missing design-B fallback ${fallback}`);
   assert.match(css, /#preview-area\.checkerboard \{[^}]*background-image: var\(--vpe-checker\)/);
   assert.match(css, /--vpe-checker: repeating-conic-gradient\(rgba\(128, 128, 128/);
-  assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export PNG is the primary action');
+  assert.match(css, /#action-export-png \{[^}]*background: var\(--vpe-accent\)/, 'Export Plain PNG is the primary action');
   assert.match(css, /#tool-save \{[^}]*background: var\(--vpe-accent\)/, 'Save is the primary toolbar action');
   assert.match(css, /--vpe-btn-border: var\(--vscode-button-border, #858585\)/, 'buttons get a visible outline colour');
   assert.match(css, /--vpe-btn-radius: 6px/, 'buttons are rounded rectangles');
   assert.match(css, /button \{[^}]*border: 1px solid var\(--vpe-btn-border\); border-radius: var\(--vpe-btn-radius\)/, 'every button is a rounded-rect outline');
+});
+
+test('edited previews never load as webview resources (Issue #47 follow-up)', async () => {
+  const csp = cspFor(assets);
+  assert.match(csp, /img-src https:\/\/webview\.example data: blob:/,
+    'the saved file loads from the webview origin; edited previews use data:/blob: URIs');
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /URL\.createObjectURL\(new Blob\(\[source\], \{ type: 'image\/svg\+xml' \}\)\)/,
+    'an SVG document renders its edited preview locally from the model text');
+  assert.match(js, /The source has no <svg> root element to preview/,
+    'a source without an svg root reports the invalid outcome instead of a broken image');
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /type: 'previewRendered', revision: event\.revision, uri: event\.imageUri/,
+    'a Core-rendered PNG preview is posted as the data URI the renderer produced');
+  const renderer = await readFile(new URL('../src/corePreview.ts', import.meta.url), 'utf8');
+  assert.match(renderer, /data:image\/png;base64,\$\{Buffer\.from\(rendered\.png\)\.toString\('base64'\)\}/,
+    'the TS Core preview renderer resolves a PNG data URI');
+  assert.ok(!host.includes('previewDir'), 'the temp-file preview directory plumbing is gone');
+  assert.match(host, /kind: document\.kind/, 'init tells the webview the document kind');
+  assert.ok(!host.includes('createSvgPreviewRenderer'), 'the temporary-file SVG preview renderer is gone');
+});
+
+test('preview toggle opens on Editing; an SVG document disables the PNG view (Issue #45)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /if \(persistedPanel\.previewMode === 'saved'\) previewState\.showSaved\(\);/,
+    'only an explicitly persisted PNG choice restores the PNG view');
+  assert.match(js, /pngButton\.disabled = true;/, 'the PNG button is disabled for SVG documents');
+  assert.match(js, /An SVG file has no PNG image/, 'the disabled button explains itself');
+  const css = await readFile(new URL('../webview/editor.css', import.meta.url), 'utf8');
+  assert.match(css, /#preview-toggle button:disabled \{ opacity: 0\.45;/, 'the disabled PNG button is greyed out');
+});
+
+test('SVG documents get Normalize SVG and Export as Vector PNG panel buttons (Issue #47)', async () => {
+  const html = buildEditorHtml(assets);
+  assert.match(html, /id="preview-actions-svg" hidden/, 'the SVG action row starts hidden');
+  assert.match(html, /id="action-normalize" type="button">Normalize SVG</);
+  assert.match(html, /id="action-export-vector-png" type="button">Export as Vector PNG</);
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  assert.match(js, /postMessage\(\{ type: 'normalizeSvg' \}\)/, 'the button posts the normalizeSvg message');
+  assert.match(js, /postMessage\(\{ type: 'exportAsVectorPng' \}\)/, 'the button posts the exportAsVectorPng message');
+  assert.match(js, /svgActions\.hidden = false;/, 'init reveals the row for SVG documents');
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  assert.match(host, /message\.type === 'normalizeSvg'\) \{\s*void this\.normalizeSvg\(document\.uri\);/,
+    'the host runs the existing Normalize SVG command logic for this document');
+  assert.match(host, /message\.type === 'exportAsVectorPng'\) \{\s*void this\.exportAsVectorPng\(document\.uri\);/,
+    'the host runs the existing Export as Vector PNG command logic for this document');
+});
+
+test('host-originated syncs are undoable Monaco edits, not setValue (Issue #18 items 5.7/6.2)', async () => {
+  const js = await readFile(new URL('../webview/editor.js', import.meta.url), 'utf8');
+  const syncBlock = js.slice(js.indexOf("message.type === 'sourceSync'"), js.indexOf("message.type === 'previewRendered'"));
+  assert.match(syncBlock, /editor\.executeEdits\('vectorPng\.hostSync', \[\{ range: model\.getFullModelRange\(\), text: message\.source \}\]\);/);
+  assert.match(syncBlock, /editor\.pushUndoStop\(\);/);
+  // The init handler keeps setValue: the freshly loaded source must
+  // not be undoable back to an empty model.
+  const initBlock = js.slice(js.indexOf("message.type === 'init'"), js.indexOf("message.type === 'rootFill'"));
+  assert.match(initBlock, /editor\.setValue\(message\.source\);/);
 });

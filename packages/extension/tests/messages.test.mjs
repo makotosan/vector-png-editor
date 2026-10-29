@@ -32,7 +32,7 @@ test('oversized serialized message is rejected before parsing fields', () => {
 });
 
 test('toolbar and panel action messages carry no fields and reject any', () => {
-  for (const type of ['saveDocument', 'formatSource', 'copySource', 'exportSource', 'exportPng']) {
+  for (const type of ['saveDocument', 'formatSource', 'copySource', 'exportSource', 'exportPng', 'normalizeSvg', 'exportAsVectorPng']) {
     assert.deepEqual(validateWebviewMessage({ type }), { ok: true, message: { type } });
     assert.equal(validateWebviewMessage({ type, path: '/tmp/x' }).ok, false, `${type} with a field`);
     assert.equal(validateWebviewMessage({ type, value: 'x' }).ok, false);
