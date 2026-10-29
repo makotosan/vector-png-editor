@@ -5,9 +5,11 @@
 // for both the container and the validator (positions, namespace
 // expansion, traversal order, zlib stream exactness, ...).
 // The normalization section additionally compares the normalizer's
-// output bytes and section 7 reports exactly, and the gated verdicts
-// across engines (Cairo vs resvg) with the known renderer-semantics
-// divergences tagged per case — see KNOWN_GATE_DIVERGENCES.
+// output bytes and section 7 reports exactly, and the gated
+// verdicts across engines (Cairo vs resvg). Since the gate
+// accommodation (option A, below), the gates are expected to
+// agree on every case; KNOWN_GATE_DIVERGENCES is empty and any
+// disagreement fails this suite.
 //
 // This is port verification, not renderer-conformance work: no
 // pixels are compared. Gated on a Python with the Core's
@@ -594,36 +596,33 @@ async function buildNormalizeCases() {
   return cases;
 }
 
-// Gate divergences that are renderer semantics, not port bugs. In
-// each case the structure outputs are byte-identical (asserted by
-// the structure test) and the Python gate passes on CairoSVG, while
-// the TS gate honestly reports render-mismatch on resvg:
-// - css-rx: resvg ignores the SVG2 geometry properties rx/ry when
-//   they arrive via CSS; materializing them as attributes (what the
-//   transformation does) turns square corners round under resvg.
-//   CairoSVG applies them in both forms, so its gate is unaffected.
-// - marker-raster: resvg rasterizes a native marker and the spec's
-//   expanded <g> clone with slightly different antialiasing (edge
-//   deltas up to ~46/255 on the iso7010 arrowheads). With marker
-//   rendering factored out, before/after renders are pixel-equal.
-// - stroke-none: the Issue #59 decision — resvg does not paint
-//   native markers on stroke="none" hosts (CairoSVG paints them);
-//   the transformation mirrors Python exactly and the expanded
-//   clone IS painted, so the within-resvg gate reports a mismatch.
-// Renderer-conformance records are Issue #61's deferred scope; this
-// table records the divergences so any NEW disagreement fails here.
-const KNOWN_GATE_DIVERGENCES = {
-  'extra:stroke-none-marker': 'stroke-none',
-  'extra:g-format': 'marker-raster',
-  'extra:deep-clone-tail': 'stroke-none',
-  'norm:rounded-diagram-arrows': 'css-rx',
-  'corpus:eu-product-framework-timeline.svg': 'css-rx',
-  'corpus:pld-timeline.svg': 'css-rx',
-  'corpus:residual-risk-reassessment-flow.svg': 'css-rx',
-  'corpus:safety-information-traceability.svg': 'css-rx',
-  'corpus:iso7010-global-alignment.svg': 'marker-raster',
-  'corpus:iso7010-update-cycle.svg': 'marker-raster',
-};
+// Gate divergences between the engines were renderer semantics,
+// not port bugs, in three classes — in each, the structure
+// outputs are byte-identical (asserted by the structure test)
+// and the Python gate passed on CairoSVG while the TS gate
+// reported render-mismatch on resvg:
+// - css-rx: resvg ignores the SVG2 geometry properties in CSS
+//   (measured: the whole set — x, y, width, height, cx, cy, r,
+//   rx, ry); materializing them as attributes (what the
+//   transformation does) changed the resvg render.
+// - marker-raster: resvg rasterized a native marker and the
+//   spec's expanded <g> clone with slightly different
+//   antialiasing (edge deltas up to ~46/255 on the iso7010
+//   arrowheads).
+// - stroke-none: resvg does not paint native markers on
+//   stroke="none" hosts (CairoSVG paints them); the expanded
+//   clone IS painted, so the within-resvg gate saw a difference.
+// The user approved option A (2026-10-29): the TS gate renders
+// its BEFORE image from an accommodated copy of the input —
+// geometry winners from CSS also set as attributes, markers
+// expanded by the transformation's own section 3.1 code path
+// (see gateInputText in src/normalize.ts) — so both engines'
+// gates now agree on every case and this table is EMPTY. It is
+// kept as the enforcement mechanism: if a future case ever
+// diverges, the gated comparison below fails and the case must
+// be isolated and reported precisely — never re-tagged here
+// silently.
+const KNOWN_GATE_DIVERGENCES = {};
 
 /** Split a section 7 report into the part that must be identical
  * across engines and the render block, whose engine-specific fields
@@ -684,7 +683,7 @@ parityTest('TS and Python agree on normalization structure (verdict, code, bytes
   assert.ok(checked >= 40, `expected the full normalize corpus, got ${checked}`);
 });
 
-parityTest('TS and Python gates agree, modulo the tagged renderer divergences', async () => {
+parityTest('TS and Python gates agree on every case (structure and gate verdict)', async () => {
   const cases = await buildNormalizeCases();
   const py = await runNormalizeDriver(cases);
   const fonts = await loadSpikeFonts();

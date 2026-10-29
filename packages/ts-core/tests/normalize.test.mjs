@@ -11,14 +11,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { readFile, readdir } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   NormalizeFailure,
   NormalizeRejection,
+  gateInputText,
   normalizeDocument,
   normalizeStructure,
+  renderGate,
 } from '../src/normalize.ts';
 import { renderSvgToPng } from '../src/render.ts';
 import { decodePngRgba } from '../src/pngPixels.ts';
@@ -27,6 +30,8 @@ import { loadSpikeFonts } from './test-fonts.mjs';
 const fixtures = fileURLToPath(
   new URL('../../core/tests/fixtures/normalization/', import.meta.url),
 );
+const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
+const corpusDir = join(dirname(repoRoot), 'user/files');
 const enc = (s) => new TextEncoder().encode(s);
 const dec = (bytes) => new TextDecoder().decode(bytes);
 /** Attribute values as a parser would hand them back (entities resolved). */
@@ -415,15 +420,22 @@ test('normalizeDocument: the nameplate passes the resvg gate', async () => {
 });
 
 // ----------------------------------------------------------------
-// The stroke="none" decision (Issue #59): the transformation mirrors
-// Python exactly — markers on stroke="none" hosts stay an expanded
-// clone group in the output — even though resvg does not paint
-// native markers on stroke="none" hosts (CairoSVG does). The gate
-// therefore reports a mismatch for such documents under resvg; that
-// divergence is recorded, not compensated for, because changing the
-// output to suit one renderer would break parity with the Python
-// normalizer. Renderer-conformance records are Issue #61's deferred
-// scope.
+// The stroke="none" decision (Issue #59) and the gate
+// accommodation (user-approved option A, 2026-10-29): the
+// transformation mirrors Python exactly — markers on
+// stroke="none" hosts stay an expanded clone group in the
+// output, never adjusted to suit one renderer. The gate no
+// longer renders the raw input as its BEFORE image (resvg
+// paints no native marker on a stroke="none" host, so the raw
+// before-image can never equal the clone-painting output);
+// instead the before-image is the accommodated input produced
+// by gateInputText — geometry winners from CSS also set as
+// attributes, markers expanded by the same section 3.1 code
+// path — so both sides render in forms resvg renders
+// faithfully and exact RGBA equality still decides. The
+// engine fact itself (resvg paints no native marker on a
+// stroke="none" host, CairoSVG paints it) is unchanged and
+// still asserted below.
 // ----------------------------------------------------------------
 
 const STROKE_NONE_INPUT =
@@ -444,7 +456,7 @@ test('stroke="none" marker host: structure output is byte-identical to Python', 
   assert.equal(report.changes.expanded_markers, 1);
 });
 
-test('stroke="none" marker host: resvg paints no native marker, the gate says mismatch', async () => {
+test('stroke="none" marker host: resvg paints no native marker (engine fact)', async () => {
   const fonts = await loadSpikeFonts();
   const options = { fonts, width: 60, height: 40 };
   // resvg paints nothing for the native marker on a stroke="none"
@@ -454,13 +466,115 @@ test('stroke="none" marker host: resvg paints no native marker, the gate says mi
   const withMarker = decodePngRgba((await renderSvgToPng(STROKE_NONE_INPUT, options)).png);
   const withoutMarker = decodePngRgba((await renderSvgToPng(unmarked, options)).png);
   assert.deepEqual(withMarker.data, withoutMarker.data);
-  // The expanded clone in the normalized output IS painted (it is an
-  // ordinary group), so the within-resvg gate honestly reports the
-  // difference the Python/Cairo gate does not see.
-  await assert.rejects(normalizeDocument(enc(STROKE_NONE_INPUT), { fonts }), (error) => {
-    assert.ok(error instanceof NormalizeRejection);
+});
+
+test('stroke="none" marker host: the accommodated gate passes', async () => {
+  const fonts = await loadSpikeFonts();
+  const { output, report } = await normalizeDocument(enc(STROKE_NONE_INPUT), { fonts });
+  assert.equal(dec(output), STROKE_NONE_OUTPUT);
+  assert.equal(report.status, 'success');
+  assert.equal(report.checks.render, 'pass');
+});
+
+// ----------------------------------------------------------------
+// The gate accommodation (option A): positive cases for each of
+// the three construct classes resvg cannot render in the
+// input's original form, the exact shape of gateInputText, and
+// a negative control proving the gate still bites.
+// ----------------------------------------------------------------
+
+const CSS_RX_INPUT =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">' +
+  '<style>.round {rx: 18; fill: #363636}</style>' +
+  '<rect class="round" x="10" y="10" width="80" height="60"/></svg>';
+
+test('gate accommodation: CSS rx passes the gate (rounded-diagram-arrows class)', async () => {
+  const fonts = await loadSpikeFonts();
+  const minimal = await normalizeDocument(enc(CSS_RX_INPUT), { fonts });
+  assert.equal(minimal.report.checks.render, 'pass');
+  // The catalog case combines CSS rx with markers and an
+  // accessibility migration and also passes end to end now.
+  const catalog = await normalizeDocument(
+    enc(catalogCase('rounded-diagram-arrows').input), { fonts },
+  );
+  assert.equal(catalog.report.checks.render, 'pass');
+  assert.equal(catalog.report.changes.expanded_markers, 2);
+});
+
+test('gate accommodation: native-marker rasterization passes the gate (g-format class)', async () => {
+  const fonts = await loadSpikeFonts();
+  // The small rotated arrowhead whose native-vs-clone
+  // antialiasing differed before the accommodation.
+  const svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><defs>' +
+    '<marker id="a" markerWidth="7.5" markerHeight="3.25" refX="0" refY="0" orient="auto">' +
+    '<path d="M0,0 L7.5,1.625 L0,3.25 Z" fill="red"/></marker></defs>' +
+    '<path d="M1.5 2.25 L30.75 9.125" fill="none" stroke="black" stroke-width="0.5" marker-end="url(#a)"/></svg>';
+  const { report } = await normalizeDocument(enc(svg), { fonts });
+  assert.equal(report.checks.render, 'pass');
+  assert.equal(report.changes.expanded_markers, 1);
+});
+
+test('gateInputText applies exactly the two accommodations and nothing else', () => {
+  // (1) The CSS geometry winner is also set as an attribute;
+  // the paint declaration stays in CSS, unmaterialized.
+  const rxGate = gateInputText(enc(CSS_RX_INPUT));
+  assert.match(rxGate, /<rect[^>]* rx="18" \/>/);
+  assert.ok(rxGate.includes('<style>.round {rx: 18; fill: #363636}</style>'), rxGate);
+  assert.ok(!rxGate.includes('fill="#363636"'), rxGate);
+  // (2) Markers are expanded in the gate input by the same code
+  // path, and marker-end is consumed everywhere.
+  const markerGate = gateInputText(enc(STROKE_NONE_INPUT));
+  assert.ok(
+    markerGate.includes('<g transform="translate(50 20) rotate(0) scale(1) translate(-10 -6)"'),
+    markerGate,
+  );
+  assert.ok(!markerGate.includes('marker-end'), markerGate);
+  // A document using neither construct is only re-serialized:
+  // its CSS is byte-preserved and nothing is materialized.
+  const plain =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20">' +
+    '<style>.a {fill: red}</style><rect class="a" width="20" height="20"/></svg>';
+  const plainGate = gateInputText(enc(plain));
+  assert.ok(plainGate.includes('<style>.a {fill: red}</style>'), plainGate);
+  assert.ok(!plainGate.includes('fill="red"'), plainGate);
+});
+
+test('render gate negative control: a hand-broken output still mismatches', async () => {
+  const fonts = await loadSpikeFonts();
+  const input = enc(catalogCase('cascade').input);
+  const genuine = normalizeStructure(input);
+  const okReport = normalizeStructure(input).report;
+  await renderGate(input, genuine.output, okReport, { fonts });
+  assert.equal(okReport.checks.render, 'pass');
+  const brokenText = dec(genuine.output).replace('fill="green"', 'fill="red"');
+  assert.notEqual(brokenText, dec(genuine.output));
+  const brokenReport = normalizeStructure(input).report;
+  await assert.rejects(renderGate(input, enc(brokenText), brokenReport, { fonts }), (error) => {
+    assert.ok(error instanceof NormalizeFailure);
     assert.equal(error.code, 'render-mismatch');
-    assert.equal(error.report.checks.render, 'mismatch');
     return true;
   });
+  assert.equal(brokenReport.checks.render, 'mismatch');
+});
+
+// ----------------------------------------------------------------
+// The corpus, end to end: all nine user corpus SVGs pass the
+// gated normalization (structure + gate), matching the Python
+// Core's all-pass result. Gated on the corpus being present,
+// following the parity suite's precedent.
+// ----------------------------------------------------------------
+
+const corpusTest = existsSync(corpusDir) ? test : test.skip;
+
+corpusTest('all nine corpus SVGs pass normalizeDocument end-to-end', async () => {
+  const fonts = await loadSpikeFonts();
+  const names = (await readdir(corpusDir)).filter((n) => n.endsWith('.svg')).sort();
+  assert.equal(names.length, 9);
+  for (const name of names) {
+    const source = new Uint8Array(await readFile(join(corpusDir, name)));
+    const { report } = await normalizeDocument(source, { fonts });
+    assert.equal(report.status, 'success', name);
+    assert.equal(report.checks.render, 'pass', name);
+  }
 });
