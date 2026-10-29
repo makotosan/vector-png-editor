@@ -165,20 +165,19 @@ test('a build conflict surfaces as a failure, not a silent overwrite', async () 
   assert.deepEqual(result, { status: 'failed', stage: 'build', code: 'conflict', message: 'destination changed' });
 });
 
-// Integration: validate and build now run in-process on the
-// TypeScript Core (Issue #58), so the build route is tested by
-// default. The normalization route still runs the Python Core's
-// `convert` (Phase 2, Issue #59): its test stays gated on
-// VECTOR_PNG_TEST_PYTHON, a Python with the Core importable.
+// Integration: validate, build and the normalization route all
+// run in-process on the TypeScript Core (Issues #58 and #59), so
+// every route is tested by default and no test in this suite is
+// Python-gated any more. (The Python environment machinery's own
+// tests - discovery, managed env - use fakes and run by default
+// too; the machinery itself is Phase 3's to remove.)
 const runtime = createTsCoreRuntime({ fonts: loadHostFonts() });
-const python = process.env.VECTOR_PNG_TEST_PYTHON;
-const maybe = python ? test : test.skip;
 
 test('TS Core: valid source exports a vector-png that round-trips', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vpe-export-'));
   const target = join(dir, 'doc.png');
   const deps = {
-    ...createCoreExportDeps(undefined, runtime),
+    ...createCoreExportDeps(runtime),
     confirmOverwrite: async () => true,
     presentDiagnostics: async () => 'cancel',
   };
@@ -188,14 +187,14 @@ test('TS Core: valid source exports a vector-png that round-trips', async () => 
   assert.equal(extractSource(await readFile(target)).text, VALID);
 });
 
-maybe('styled source exports via normalization (Python convert) and the source is untouched', async () => {
+test('styled source exports via normalization (TS Core convert) and the source is untouched', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'vpe-export-'));
   const sourcePath = join(dir, 'doc.svg');
   await writeFile(sourcePath, STYLED, 'utf8');
   const target = join(dir, 'doc.png');
   let presented = 0;
   const deps = {
-    ...createCoreExportDeps(python, runtime),
+    ...createCoreExportDeps(runtime),
     confirmOverwrite: async () => true,
     presentDiagnostics: async (diagnostics) => {
       presented = diagnostics.length;

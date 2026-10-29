@@ -12,8 +12,9 @@ import { ExportCoreError, type ProfileValidation } from './export.ts';
 // normalization `convert` route, and the result says so, so the user
 // knows the picture came from the normalized form. Since Issue #58
 // the gate and the build route run in-process on the TypeScript
-// Core; `convert` still runs the Python Core (its port is Phase 2,
-// Issue #59). If the chosen route fails, the other route is tried
+// Core, and since Issue #59 so does `convert` (the normalizer
+// port); no route needs a Python environment. If the chosen route
+// fails, the other route is tried
 // once; only when both fail is an error reported (the primary
 // route's - the one the validation dictated). Whichever route
 // produced it, the built vector-png is stripped of exactly its one

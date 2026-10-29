@@ -178,7 +178,10 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
   ) {}
 
   // Python resolution (P2-07): an explicit setting wins; otherwise
-  // the managed environment's active interpreter.
+  // the managed environment's active interpreter. Since Issue #59
+  // no editor feature runs the Python Core; this remains for the
+  // environment status display until Phase 3 (Issue #60) removes
+  // the Python environment machinery.
   private corePythonPath(): Promise<string | undefined> {
     const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
     return resolveCorePython(this.managedRoot, configured);
@@ -494,7 +497,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       const source = document.pendingSource ?? document.savedSource ?? '';
       const defaultName = document.kind === 'svg' ? `${documentStem()}.png` : `${documentStem()}.plain.png`;
       const deps = {
-        ...createCorePlainPngDeps(await this.corePythonPath(), this.tsRuntime),
+        ...createCorePlainPngDeps(this.tsRuntime),
         chooseTarget: async (defaultPath: string): Promise<string | null> => {
           const target = await vscode.window.showSaveDialog({
             defaultUri: vscode.Uri.file(defaultPath),
@@ -803,7 +806,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
     }
     const targetPath = uri.fsPath.replace(/\.svg$/i, '.png');
     const deps = {
-      ...createCoreExportDeps(await this.corePythonPath(), this.tsRuntime),
+      ...createCoreExportDeps(this.tsRuntime),
       confirmOverwrite: async (path: string): Promise<boolean> => {
         const name = path.split('/').pop() ?? path;
         const choice = await vscode.window.showWarningMessage(
@@ -887,7 +890,7 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
       return;
     }
     const source = document.pendingSource ?? document.savedSource ?? '';
-    const result = await normalizeSourceText(createCoreNormalizeDeps(await this.corePythonPath()), source);
+    const result = await normalizeSourceText(createCoreNormalizeDeps(this.tsRuntime), source);
     if (result.status === 'already-normalized') {
       void vscode.window.showInformationMessage('Vector PNG: this SVG is already in normalized safe-svg-v1 form; no changes were made.');
       return;

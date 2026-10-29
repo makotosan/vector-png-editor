@@ -17,12 +17,12 @@ the previously active environment. **Python Environment Status** and
 resolution is: the `vectorPng.corePythonPath` setting, else the
 managed environment's active interpreter.
 
-Since Issue #58 the Python environment serves only what still runs
-on the Python Core: **Normalize SVG** and the normalization
-(`convert`) route of the exports. Previews, saving, profile
-validation and the export build route run in-process on the
-TypeScript Core (packages/ts-core) and need no Python at all. The
-setup commands themselves retire in Phase 3 (Issue #60).
+Since Issue #58 previews, saving, profile validation and the
+export build route run in-process on the TypeScript Core
+(packages/ts-core), and since Issue #59 so do **Normalize SVG**
+and the normalization (`convert`) route of the exports: no editor
+feature needs the Python environment any more. The setup commands
+themselves retire in Phase 3 (Issue #60).
 
 ## P2-06: external change conflicts
 
@@ -143,9 +143,9 @@ editable kinds.
 | Editing (preview toggle) | The current source rendered by the TypeScript Core in-process (no Python needed; a profile-invalid source shows the failure instead) | The current text rendered in place (no Core needed; never blocked by validation) |
 | Copy SVG (code toolbar, beside Wrap) | Copies the current source text | Same |
 | Export SVG | Saves the current source as `.svg` (default name `<base>.svg`) | Same (default name `<base>-copy.svg`) |
-| Export Plain PNG | Saves a plain PNG with no embedded source (default `<base>.plain.png`; rendered by the TypeScript Core; a non-conforming source renders via normalization - the Python Core - and says so) | Same (default `<base>.png`) |
-| Normalize SVG | — (command and button are SVG-only) | Button under the action row, SVG documents only: applies Core normalization as one undoable edit (Python Core required) |
-| Export as Vector PNG | — (command and button are SVG-only) | Button under the action row, SVG documents only: writes the sibling `.png` as a vector-png (TypeScript Core; the normalization route needs the Python Core); the source file is never modified |
+| Export Plain PNG | Saves a plain PNG with no embedded source (default `<base>.plain.png`; rendered by the TypeScript Core; a non-conforming source renders via normalization - also the TypeScript Core - and says so) | Same (default `<base>.png`) |
+| Normalize SVG | — (command and button are SVG-only) | Button under the action row, SVG documents only: applies Core normalization as one undoable edit (TypeScript Core, in-process) |
+| Export as Vector PNG | — (command and button are SVG-only) | Button under the action row, SVG documents only: writes the sibling `.png` as a vector-png (TypeScript Core, including the normalization route); the source file is never modified |
 
 ## Tests
 
@@ -157,9 +157,9 @@ npm test        # node --test: detection, routing and new-document suites
 
 The suites also exercise packages/ts-core in-process; run
 `npm install` in packages/ts-core once so its @resvg/resvg-wasm
-dependency is present. A few normalization tests additionally use
-the Python Core and are skipped unless VECTOR_PNG_TEST_PYTHON
-names a Python that has it installed.
+dependency is present. No test in the extension suites needs a
+Python Core any more (normalization and convert run on ts-core by
+default since Issue #59).
 
 Extension-host command tests run in the VS Code test host as part of the
 P3 acceptance work; the unit suites above cover the same routing decisions

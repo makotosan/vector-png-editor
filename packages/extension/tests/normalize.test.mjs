@@ -5,6 +5,8 @@ import {
   applyNormalizedEdit, formatNormalizeSummary, normalizeSourceText,
 } from '../src/normalize.ts';
 import { createCoreNormalizeDeps, summaryFromReport } from '../src/coreNormalize.ts';
+import { createTsCoreRuntime } from '../src/tsCore.ts';
+import { loadHostFonts } from '../src/hostFonts.ts';
 import { ExportUnavailableError } from '../src/export.ts';
 
 const ORIGINAL = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><style>.a{fill:red}</style><rect class="a" width="8" height="8"/></svg>';
@@ -107,13 +109,12 @@ test('summaryFromReport reads counts, migrations and losses from a conversion re
   assert.deepEqual(summary.losses, ['Accessibility: role "img" could not be preserved (unsupported-semantics)']);
 });
 
-// Real-Core integration: set VECTOR_PNG_TEST_PYTHON to a Python with
-// the Core importable. Skipped (not faked) when no Core is available.
-const python = process.env.VECTOR_PNG_TEST_PYTHON;
-const maybe = python ? test : test.skip;
+// Real integration: normalization runs in-process on the
+// TypeScript Core (Issue #59), so these run by default.
+const runtime = createTsCoreRuntime({ fonts: loadHostFonts() });
 
-maybe('real Core: styled source normalizes, and its output is a fixed point', async () => {
-  const deps = createCoreNormalizeDeps(python);
+test('TS Core: styled source normalizes, and its output is a fixed point', async () => {
+  const deps = createCoreNormalizeDeps(runtime);
   const first = await normalizeSourceText(deps, ORIGINAL);
   assert.equal(first.status, 'normalized', JSON.stringify(first));
   assert.ok(!first.source.includes('<style'), 'the style element is materialized away');
@@ -122,8 +123,8 @@ maybe('real Core: styled source normalizes, and its output is a fixed point', as
   assert.deepEqual(second, { status: 'already-normalized' }, 'normalized output normalizes to itself byte-exactly');
 });
 
-maybe('real Core: a section 7 failure reports its code and errors', async () => {
-  const deps = createCoreNormalizeDeps(python);
+test('TS Core: a section 7 failure reports its code and errors', async () => {
+  const deps = createCoreNormalizeDeps(runtime);
   const bad = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><style>.a {letter-spacing: 1em}</style><rect class="a" width="8" height="8"/></svg>';
   const result = await normalizeSourceText(deps, bad);
   assert.equal(result.status, 'failed');
