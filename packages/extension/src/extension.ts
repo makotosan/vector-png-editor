@@ -31,10 +31,6 @@ import { createCoreSaveDeps } from './coreSave.ts';
 import { SourceHistory } from './history.ts';
 import { writeBackup, readBackup, deleteBackup } from './backup.ts';
 import { ExternalChangeTracker } from './watch.ts';
-import { discoverPython, parseProbeOutput, PROBE_SCRIPT } from './pythonDiscovery.ts';
-import { resolveCorePython, managedPython, locateCoreArtifacts } from './managedEnv.ts';
-import { prepareEnvironment, rollbackEnvironment, EnvironmentError, isolatedEnvironment } from '../../bridge/src/environment.ts';
-import { runBounded } from '../../bridge/src/process.ts';
 
 export const VIEW_TYPE = 'vectorPng.editor';
 
@@ -120,8 +116,7 @@ type VectorPngEdit = {
 // authoritative undo/redo history, backup recovery and multi-panel
 // synchronization are P2-05; external-change watching with revision
 // tokens, clean reload, dirty preservation and explicit conflict
-// resolution at save is P2-06; Python discovery and the managed
-// environment lifecycle (bridge manager) are P2-07. Plain `.svg`
+// resolution at save is P2-06. Plain `.svg`
 // documents (open/edit/save as text, export as vector-png through the
 // Core `build` or the normalization `convert` route, and the explicit
 // undoable Normalize SVG command) are Issue #47.
@@ -173,19 +168,8 @@ class VectorPngEditorProvider implements vscode.CustomEditorProvider<VectorPngDo
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly managedRoot: string,
     private readonly tsRuntime: TsCoreRuntime,
   ) {}
-
-  // Python resolution (P2-07): an explicit setting wins; otherwise
-  // the managed environment's active interpreter. Since Issue #59
-  // no editor feature runs the Python Core; this remains for the
-  // environment status display until Phase 3 (Issue #60) removes
-  // the Python environment machinery.
-  private corePythonPath(): Promise<string | undefined> {
-    const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
-    return resolveCorePython(this.managedRoot, configured);
-  }
 
   async openCustomDocument(uri: vscode.Uri): Promise<VectorPngDocument> {
     const bytes = await vscode.workspace.fs.readFile(uri);
@@ -966,80 +950,7 @@ async function newDocument(): Promise<void> {
   await vscode.commands.executeCommand('vscode.openWith', uri, VIEW_TYPE);
 }
 
-const PYTHON_HINT = 'Install Python 3.11-3.13 from https://www.python.org/downloads/ (Windows: tick "Add python.exe to PATH" or install the py launcher; macOS: the python.org installer or Homebrew; Linux: your distribution packages), then run the setup command again.';
-const CAIRO_HINT = 'The Core also needs the native Cairo library: Windows - install the GTK runtime; macOS - `brew install cairo`; Linux - install libcairo2 from your distribution. Then run the setup command again.';
-
-async function probeCandidate(candidate: { command: string; args: string[] }) {
-  const { stdout } = await runBounded(candidate.command, [...candidate.args, '-I', '-c', PROBE_SCRIPT], {
-    env: isolatedEnvironment(), cwd: process.cwd(), timeoutMs: 15_000,
-  });
-  return parseProbeOutput(stdout);
-}
-
-async function setupEnvironment(context: vscode.ExtensionContext, managedRoot: string): Promise<void> {
-  const discovery = await discoverPython(probeCandidate, process.platform);
-  if (!discovery.selected) {
-    const found = discovery.unsupported.map((u) => `${u.version.join('.')} (${u.via})`).join(', ');
-    void vscode.window.showErrorMessage(
-      `Vector PNG: no supported Python found.${found ? ` Found only unsupported versions: ${found}.` : ''} ${PYTHON_HINT}`);
-    return;
-  }
-  const artifacts = await locateCoreArtifacts({
-    extensionDir: context.extensionPath,
-    wheelSetting: vscode.workspace.getConfiguration('vectorPng').get<string>('coreWheelPath'),
-  });
-  if (!artifacts) {
-    void vscode.window.showErrorMessage(
-      'Vector PNG: no Core wheel found. Set "vectorPng.coreWheelPath" to a trusted vector_png_editor_core wheel, or install a build that bundles one.');
-    return;
-  }
-  const allowNetwork = await vscode.window.showInformationMessage(
-    `Set up the managed Python environment from the Core ${artifacts.version} wheel (${artifacts.source})? Dependencies install from the pinned lock; setup never touches your system Python, and a failure keeps the current environment.`,
-    { modal: true }, 'Set up (offline, local wheelhouse only)', 'Set up (allow network)');
-  if (!allowNetwork) return;
-  const controller = new AbortController();
-  try {
-    const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Vector PNG: setting up the Python environment', cancellable: true },
-      async (progress, token) => {
-        token.onCancellationRequested(() => controller.abort());
-        return prepareEnvironment({
-          root: managedRoot, python: discovery.selected!.executable,
-          wheel: artifacts.wheel, wheelSha256: artifacts.wheelSha256, version: artifacts.version,
-          requirements: artifacts.requirements, requirementsSha256: artifacts.requirementsSha256,
-          allowNetwork: allowNetwork.includes('allow network'), signal: controller.signal,
-          onProgress: (stage) => progress.report({ message: stage }),
-        });
-      });
-    void vscode.window.showInformationMessage(`Vector PNG: environment ready (${result.python}). Normalize SVG can now use the Python Core.`);
-  } catch (error) {
-    const stage = error instanceof EnvironmentError ? error.stage : '';
-    const message = error instanceof Error ? error.message : String(error);
-    const hint = /cairo|render/i.test(stage + message) ? ` ${CAIRO_HINT}` : '';
-    void vscode.window.showErrorMessage(`Vector PNG setup failed (${stage || 'error'}): ${message}. The previous environment, if any, is unchanged.${hint}`);
-  }
-}
-
-async function environmentStatus(managedRoot: string): Promise<void> {
-  const configured = vscode.workspace.getConfiguration('vectorPng').get<string>('corePythonPath');
-  const managed = await managedPython(managedRoot);
-  const effective = await resolveCorePython(managedRoot, configured);
-  // A configured (or resolved) path that does not exist must not be
-  // presented as usable: the macOS acceptance run (Issue #18, item
-  // 7.1) set /nonexistent/python3 and the status showed it as the
-  // Effective Python with no hint that it was invalid.
-  const notFound = (path: string | undefined): string =>
-    path !== undefined && path.trim() !== '' && !existsSync(path.trim()) ? ' (file not found)' : '';
-  const lines = [
-    `Configured Python: ${configured?.trim() ? configured : '(not set)'}${notFound(configured)}`,
-    `Managed environment: ${managed ?? '(none - run "Vector PNG: Set Up Python Environment")'}`,
-    `Effective Python: ${effective ?? '(none - only Normalize SVG and the normalization export route need a Python environment; previews, saving and the other exports work without one)'}${notFound(effective)}`,
-  ];
-  void vscode.window.showInformationMessage(lines.join('  '), { modal: true });
-}
-
 export function activate(context: vscode.ExtensionContext): void {
-  const managedRoot = join(context.globalStorageUri.fsPath, 'managed-env');
   // The TypeScript Core runtime (Issue #58): host fonts are loaded
   // once for the activation, and the resvg wasm is located before
   // any render - the packaged copy under media/resvg in a VSIX, or
@@ -1052,7 +963,7 @@ export function activate(context: vscode.ExtensionContext): void {
     fonts: loadHostFonts(),
     wasmPath: wasmCandidates.find((candidate) => existsSync(candidate)),
   });
-  const provider = new VectorPngEditorProvider(context.extensionUri, managedRoot, tsRuntime);
+  const provider = new VectorPngEditorProvider(context.extensionUri, tsRuntime);
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
       webviewOptions: { retainContextWhenHidden: true },
@@ -1062,17 +973,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('vectorPng.exportAsVectorPng', (target?: vscode.Uri) => provider.exportAsVectorPng(target)),
     vscode.commands.registerCommand('vectorPng.normalizeSvg', (target?: vscode.Uri) => provider.normalizeSvg(target)),
     vscode.commands.registerCommand('vectorPng.newDocument', newDocument),
-    vscode.commands.registerCommand('vectorPng.setupEnvironment', () => setupEnvironment(context, managedRoot)),
     vscode.commands.registerCommand('vectorPng.toggleWordWrap', () => provider.toggleWordWrapOnActivePanel()),
-    vscode.commands.registerCommand('vectorPng.environmentStatus', () => environmentStatus(managedRoot)),
-    vscode.commands.registerCommand('vectorPng.rollbackEnvironment', async () => {
-      try {
-        const result = await rollbackEnvironment({ root: managedRoot });
-        void vscode.window.showInformationMessage(`Vector PNG: rolled back to the previous environment (${result.python}).`);
-      } catch (error) {
-        void vscode.window.showErrorMessage(`Vector PNG rollback failed: ${error instanceof Error ? error.message : String(error)}`);
-      }
-    }),
   );
 }
 

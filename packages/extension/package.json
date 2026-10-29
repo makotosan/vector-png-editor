@@ -18,9 +18,6 @@
     "onCommand:vectorPng.exportAsVectorPng",
     "onCommand:vectorPng.normalizeSvg",
     "onCommand:vectorPng.newDocument",
-    "onCommand:vectorPng.setupEnvironment",
-    "onCommand:vectorPng.environmentStatus",
-    "onCommand:vectorPng.rollbackEnvironment",
     "onCommand:vectorPng.toggleWordWrap"
   ],
   "main": "./out/extension.js",
@@ -70,18 +67,6 @@
       {
         "command": "vectorPng.newDocument",
         "title": "Vector PNG: New Document"
-      },
-      {
-        "command": "vectorPng.setupEnvironment",
-        "title": "Vector PNG: Set Up Python Environment"
-      },
-      {
-        "command": "vectorPng.environmentStatus",
-        "title": "Vector PNG: Python Environment Status"
-      },
-      {
-        "command": "vectorPng.rollbackEnvironment",
-        "title": "Vector PNG: Roll Back Python Environment"
       },
       {
         "command": "vectorPng.toggleWordWrap",
@@ -151,21 +136,6 @@
           "when": "activeCustomEditorId == vectorPng.editor"
         }
       ]
-    },
-    "configuration": {
-      "title": "Vector PNG Editor",
-      "properties": {
-        "vectorPng.corePythonPath": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path to a Python 3.11-3.13 executable with the vector-png-editor Core installed. Takes precedence over the managed environment (see 'Vector PNG: Set Up Python Environment'). Leave empty to use the managed environment."
-        },
-        "vectorPng.coreWheelPath": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Path to a trusted vector_png_editor_core wheel used by 'Vector PNG: Set Up Python Environment' when no bundled wheel is present."
-        }
-      }
     }
   },
   "dependencies": {

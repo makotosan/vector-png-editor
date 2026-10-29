@@ -198,11 +198,3 @@ test('host-originated syncs are undoable Monaco edits, not setValue (Issue #18 i
   const initBlock = js.slice(js.indexOf("message.type === 'init'"), js.indexOf("message.type === 'rootFill'"));
   assert.match(initBlock, /editor\.setValue\(message\.source\);/);
 });
-
-test('Environment Status flags a configured Python path that does not exist (Issue #18 item 7.1)', async () => {
-  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
-  assert.match(host, /import \{ existsSync \} from 'node:fs';/);
-  assert.match(host, /\(file not found\)/, 'a missing configured/effective path is annotated in the status dialog');
-  assert.match(host, /notFound\(configured\)/, 'the configured line is annotated');
-  assert.match(host, /notFound\(effective\)/, 'the effective line is annotated');
-});

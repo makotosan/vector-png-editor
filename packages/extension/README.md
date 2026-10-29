@@ -4,25 +4,23 @@ VS Code extension package for vector-png files: PNG images that carry their
 SVG source in a single compressed `iTXt` chunk with the keyword
 `vector-png.svg` (wire v1).
 
-## P2-07: Python discovery and managed environment
+## P2-07: Python discovery and managed environment (removed in Phase 3)
 
-Three commands integrate the bridge managed-environment manager
-(P1-04): **Set Up Python Environment** discovers a user Python
-3.11-3.13 (read-only probes; a miss is explained with install
-guidance), locates trusted Core artifacts (setting, bundled
-`managed/` wheel, or a sibling checkout), confirms any network use,
-and runs the manager with progress and cancellation - failures keep
-the previously active environment. **Python Environment Status** and
-**Roll Back Python Environment** report and roll back. Python
-resolution is: the `vectorPng.corePythonPath` setting, else the
-managed environment's active interpreter.
+P2-07 originally added three commands integrating the bridge
+managed-environment manager (P1-04): **Set Up Python Environment**,
+**Python Environment Status** and **Roll Back Python Environment**,
+plus the `vectorPng.corePythonPath` / `vectorPng.coreWheelPath`
+settings, so the editor could run the Python Core from a managed
+virtual environment.
 
 Since Issue #58 previews, saving, profile validation and the
 export build route run in-process on the TypeScript Core
 (packages/ts-core), and since Issue #59 so do **Normalize SVG**
 and the normalization (`convert`) route of the exports: no editor
-feature needs the Python environment any more. The setup commands
-themselves retire in Phase 3 (Issue #60).
+feature needs a Python environment. Phase 3 (Issue #60) removed
+the machinery again - the three commands, the two settings, the
+managed-environment modules and the bridge package are gone, and
+the extension declares no Python-related contribution at all.
 
 ## P2-06: external change conflicts
 
@@ -94,7 +92,7 @@ generated and not committed. The page shell carries a restrictive CSP
 workers), contains no user content, and receives the SVG source by
 message into a Monaco model. Completion and advisory diagnostics follow
 the safe-svg-v1 allowlists in `src/profile.ts`, which a unit test checks
-against the Python Core. Messages from the webview are schema-checked
+against the TypeScript Core. Messages from the webview are schema-checked
 and bounded in `src/messages.ts`.
 
 ## P2-01 scope: registration and open routing
@@ -116,7 +114,7 @@ and bounded in `src/messages.ts`.
   vector-png document whose embedded source is a minimal safe-svg-v1
   document, generated programmatically in `src/newDocument.ts`.
 - The routing decision (`src/routing.ts`) and detection are pure TypeScript
-  with no VS Code dependency, following the bridge package's convention of
+  with no VS Code dependency, following the repository convention of
   running TypeScript directly under Node's test runner.
 
 The view type and commands have not changed since P2-01.
