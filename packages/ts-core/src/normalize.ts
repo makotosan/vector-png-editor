@@ -29,16 +29,23 @@
 // Cross-engine pixel comparison is meaningless and is never
 // attempted here.
 //
-// One deliberate renderer divergence is recorded, not hidden:
-// resvg does not paint markers on stroke="none" hosts while
-// CairoSVG does (Issue #57 spike). The transformation mirrors
-// the Python normalizer exactly — markers on such hosts are
-// expanded like any other, never rewritten to suit one
-// renderer — so for that input class the TS gate reports
-// render-mismatch where the Python gate passes. The gate stays
-// self-consistent (before and after are both resvg renders);
-// the parent Issue #61 tracks the conformance record. See
-// tests/normalize.test.mjs for the targeted case.
+// One engine difference shapes the gate: resvg cannot render
+// every form an input may take. It ignores the SVG2 geometry
+// properties in CSS entirely (measured on resvg 2.6.2: x, y,
+// width, height, cx, cy, r, rx, ry — via style rules and style
+// attributes alike), and it paints native markers with its own
+// antialiasing, and not at all on stroke="none" hosts, where
+// CairoSVG paints them (Issue #57 spike). The transformation
+// mirrors the Python normalizer exactly — its output is never
+// adjusted to suit one renderer — so, by the user-approved
+// accommodation (2026-10-29, option A), the section 6 gate forms
+// its BEFORE image from an accommodated copy of the input: a
+// cascaded geometry winner that arrives via CSS is also set as
+// an attribute, and markers are expanded by the same section
+// 3.1 code path the transformation uses. Both sides then render
+// in forms resvg renders faithfully, and exact RGBA equality
+// still decides. See gateInputText for the exact construction
+// and its stated limits.
 import { createHash } from 'node:crypto';
 import {
   DomElement, NormalizeFailure, SVG_NS, deepClone, iterElements,
@@ -1570,6 +1577,144 @@ function checkRendererBytes(png: Uint8Array, stage: 'before' | 'after'): void {
   }
 }
 
+/**
+ * The SVG2 geometry properties resvg 2.6.2 ignores in CSS —
+ * the full set, as measured (see gateInputText): every SVG2
+ * geometry property, on every element it applies to, via style
+ * rules and style attributes alike.
+ */
+const RESVG_CSS_IGNORED_GEOMETRY = new Set([
+  'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry',
+]);
+
+/**
+ * Remove marker-end declarations from the gate input's CSS:
+ * style rules (rebuilt from the parsed rules with the property
+ * dropped, values in the parser's normalized form) and style
+ * attributes (likewise rebuilt, or removed when nothing else
+ * remains). Only sources that actually declare marker-end are
+ * rewritten; everything else keeps its exact text. This is the
+ * CSS half of the expansion's consumption of marker-end — the
+ * attribute half is expandMarkers itself.
+ */
+function consumeGateMarkerEnd(
+  styleRules: Array<{ element: DomElement; rules: CssRule[] }>,
+  root: DomElement,
+): void {
+  for (const { element, rules } of styleRules) {
+    const declares = rules.some(([, decls]) =>
+      decls.some(([prop]) => prop === 'marker-end'));
+    if (!declares) continue;
+    element.text = rules
+      .map(([selectors, decls]) => {
+        const kept = decls.filter(([prop]) => prop !== 'marker-end');
+        return `${selectors.join(',')}{${kept.map(([p, v]) => `${p}:${v}`).join(';')}}`;
+      })
+      .join('');
+  }
+  for (const node of iterElements(root)) {
+    const style = node.get('style');
+    if (style === undefined) continue;
+    const decls = parseDeclarations(tokenizeCss(checkedCss(style)), new Budget());
+    if (!decls.some(([prop]) => prop === 'marker-end')) continue;
+    const kept = decls.filter(([prop]) => prop !== 'marker-end');
+    if (kept.length === 0) node.attrib.delete('style');
+    else node.set('style', kept.map(([p, v]) => `${p}:${v}`).join(';'));
+  }
+}
+
+/**
+ * The gate's BEFORE source: the input, parsed and re-serialized
+ * with exactly the two accommodations of the user-approved
+ * option A (2026-10-29) and nothing else:
+ *
+ * 1. Geometry-property materialization. Measured on resvg
+ *    2.6.2 (attribute form vs stylesheet-rule form vs
+ *    style-attribute form, per element): EVERY SVG2 geometry
+ *    property is ignored in CSS — x, y, width, height, rx, ry
+ *    on rect; cx, cy, r on circle; cx, cy, rx, ry on ellipse —
+ *    the presentation attribute stands even when a rule
+ *    contradicts it, while paint properties in CSS are honored.
+ *    So for each element, for each geometry property whose
+ *    cascaded winning value comes from CSS (a style rule or a
+ *    style attribute), that value is also set as the element's
+ *    attribute in the gate-input tree, computed by the
+ *    transformation's own cascade (computeCascade). Within this
+ *    profile's closed CSS subset only rx/ry can ever be
+ *    cascaded — the other geometry properties are rejected as
+ *    unsupported CSS before any gate runs — so rx/ry are the
+ *    only properties this can fire on today; the measured set
+ *    is recorded in full because it is the engine fact the
+ *    accommodation rests on.
+ * 2. Marker expansion. The transformation's own section 3.1
+ *    code path (expandMarkers, G2 tangents included) runs on
+ *    the gate-input tree, and marker-end is consumed from the
+ *    tree's CSS as well, so both sides render markers as the
+ *    same expanded clones and no native marker paints beside
+ *    its clone (resvg antialiases native markers differently,
+ *    and does not paint them at all on stroke="none" hosts).
+ *
+ * Everything else about the input is preserved as parsed: all
+ * other CSS stays in CSS form, so the gate still verifies the
+ * transformation's materialization of it against the output's
+ * attributes across two different source forms, with exact
+ * RGBA equality. The narrowing is bounded to the two classes
+ * above: for them, the gate no longer independently proves
+ * that CSS-to-attribute materialization and marker expansion
+ * preserve rendering — that fidelity is covered by the
+ * structure cross-check against the Python Core, whose outputs
+ * and reports are byte-identical on the whole corpus.
+ *
+ * Runs the same inspection, stylesheet parse and cascade as
+ * the transformation on a fresh tree; the transformation
+ * itself is untouched. In the gated entry point this runs
+ * after normalizeStructure has accepted the same bytes through
+ * the same deterministic steps, so a failure here is
+ * unreachable there.
+ */
+export function gateInputText(source: Uint8Array): string {
+  const root = parseNormalizeTree(preflightNormalize(source));
+  const { ids, parent } = inspectTree(root);
+  const budget = new Budget();
+  const styleRules: Array<{ element: DomElement; rules: CssRule[] }> = [];
+  const rules: CssRule[] = [];
+  for (const node of iterElements(root)) {
+    if (svgLocal(node.tag) !== 'style') continue;
+    const parsed = parseStylesheet(node.text ?? '', budget);
+    styleRules.push({ element: node, rules: parsed });
+    rules.push(...parsed);
+  }
+  // Every stylesheet declaration is reference-checked even when
+  // it never wins or matches (profile section 2), as in the
+  // transformation.
+  for (const [, decls] of rules) {
+    for (const [prop, val] of decls) checkRefTarget(prop, val, ids);
+  }
+  const { computed, chosen } = computeCascade(
+    root, rules, ids, parent, budget, null,
+  );
+  // Accommodation 1 (see above).
+  for (const node of iterElements(root)) {
+    const nodeChosen = chosen.get(node);
+    if (nodeChosen === undefined) continue;
+    for (const [prop, entry] of nodeChosen) {
+      if (entry.origin !== 'attribute' && RESVG_CSS_IGNORED_GEOMETRY.has(prop)) {
+        node.set(prop, entry.value);
+      }
+    }
+  }
+  // Accommodation 2 (see above).
+  const markers = new Map<DomElement, MarkerDefinition>();
+  for (const node of iterElements(root)) {
+    if (svgLocal(node.tag) === 'marker') {
+      markers.set(node, markerDefinition(node, parent, computed));
+    }
+  }
+  expandMarkers(root, ids, parent, computed, markers);
+  consumeGateMarkerEnd(styleRules, root);
+  return new TextDecoder('utf-8').decode(serializeDom(root));
+}
+
 /** The section 6 gate; mutates report as the Core's gate does. */
 export async function renderGate(
   source: Uint8Array,
@@ -1581,11 +1726,13 @@ export async function renderGate(
     new TextDecoder('utf-8').decode(output),
   );
   const [width, height] = viewportOf(root);
-  // The before text is the input decoded as utf-8-sig, as in the
-  // Core: a leading BOM (one U+FEFF after the strict decode) is
-  // not part of the rendered document.
-  let beforeText = new TextDecoder('utf-8', { ignoreBOM: false }).decode(source);
-  if (beforeText.startsWith('\uFEFF')) beforeText = beforeText.slice(1);
+  // The before-image is rendered from the accommodated input
+  // (gateInputText), not the raw source: resvg cannot render
+  // the input's original form for the two accommodated
+  // construct classes, so a raw before-image would refuse
+  // transformations that preserve rendering (see gateInputText
+  // for the construction and its limits).
+  const beforeText = gateInputText(source);
   let before: Uint8Array;
   try {
     before = await renderGateSide(beforeText, width, height, options);
