@@ -1,9 +1,10 @@
 # TypeScript Core (ts-core)
 
 The TypeScript Core for vector-png-editor: the migration target
-that replaces the Python Core and its CairoSVG rendering stack
+that replaced the Python Core and its CairoSVG rendering stack
 (Issues #58 and #61; the go decision and its evidence are in
-Issue #57).
+Issue #57). The Python Core and its CLI were retired in Phase 3
+(Issue #60); this package is now the only Core.
 
 Ported so far: the renderer, the PNG container, safe-svg-v1
 validation, and svg-normalization-v1 (Phase 2, Issue #59) - and
@@ -11,8 +12,8 @@ the extension integration (Issues #58 and #59): the extension's
 open/inspect, edited previews, save, export build/validate paths
 and the Normalize SVG / convert paths run on this package
 in-process, with the extension owning file publication policy
-(its src/tsCore.ts mirrors the Python Core's writing.py
-discipline). No editor feature uses the Python Core any more.
+(its src/tsCore.ts mirrors the retired Python Core's writing.py
+discipline). No editor feature uses the Python Core.
 Not yet ported: the standalone verify path (render + pixel
 comparison).
 
@@ -88,32 +89,35 @@ comparison).
   are the Core's own: `invalid-container`, `invalid-svg`,
   `unsupported-profile`, `resource-limit`, `ordinary-png`.
 
-## Parity with the Python Core
+## Parity with the Python Core (historical record)
 
-`tests/parity.test.mjs` runs both implementations over the same
-corpora and diffs verdicts, error codes, error messages and full
-diagnostic lists: 141 SVG cases (the pinned catalog sources, the
-nine corpus SVGs, the 27 normalization catalog inputs, the
-nameplate pair, the Core tests' own cases, and crafted edge cases
-for namespaces, declarations, references, positions and traversal
-order) and 60 PNG cases (the 21 pinned catalog fixtures plus
-constructed structural mutations), plus a Python-built file whose
-TS rebuild must be byte-identical. All agree; the only tolerated
-difference is message text where the Core embeds CPython's zlib /
-codec error strings (e.g. "Error -3 while decompressing data…") —
-the TS side reports the Core's fixed message for the same
-condition, and the code always matches. The pure-TS suites encode
-the Core test suites' expectations so they run without Python;
-the cross-check is gated on `VECTOR_PNG_TEST_PYTHON`
-(default `/tmp/buildenv/bin/python`) with the repo Core sources on
-PYTHONPATH, following the repo's real-Core gating precedent.
+While the Python Core existed, a live cross-check harness
+(`tests/parity.test.mjs` + `tests/parity_driver.py`) ran both
+implementations over the same corpora and diffed verdicts, error
+codes, error messages and full diagnostic lists: 141 SVG cases
+(the pinned catalog sources, the nine corpus SVGs, the 27
+normalization catalog inputs, the nameplate pair, the Python
+tests' own cases, and crafted edge cases for namespaces,
+declarations, references, positions and traversal order) and
+60 PNG cases (the 21 pinned catalog fixtures plus constructed
+structural mutations), plus a Python-built file whose TS rebuild
+had to be byte-identical. All agreed; the only tolerated
+difference was message text where the Python side embedded
+CPython's zlib / codec error strings (e.g. "Error -3 while
+decompressing data…") — the TS side reports the Core's fixed
+message for the same condition, and the code always matched.
+The normalization cross-check compared 48 cases — the 27-case
+catalog, the nameplate input/expected pair, the nine corpus
+SVGs and crafted edge cases — with total structure-level
+agreement (see "The render gate" below for the gated part).
 
-The normalization cross-check (same harness) compares 48 cases —
-the 27-case catalog, the nameplate input/expected pair, the nine
-corpus SVGs and crafted edge cases. Structure-level agreement is
-total: verdicts, failure codes, stages and messages, normalized
-output bytes and full section 7 reports are identical on all 48.
-The gated comparison is covered under "The render gate" below.
+**The harness was removed in Phase 3 (Issue #60), together with
+the Python Core it compared against.** Its reference
+implementation no longer exists, so the live comparison cannot
+run any more; the pure-TS suites, which encode the Python test
+suites' expectations as baked fixtures, are the standing
+coverage. The results above are the recorded evidence at
+retirement time, not a check that still runs.
 
 Two findings from the port, recorded plainly:
 
@@ -169,9 +173,9 @@ within resvg instead of within CairoSVG. Cross-engine comparison
 is meaningless and is not attempted. The report's render block
 names this engine (`@resvg/resvg-wasm`, version `2.6.2`); those
 fields, and `color_alpha` / `text_policy`, are engine-specific
-by construction and are excluded from the cross-check's report
+by construction and were excluded from the cross-check's report
 comparison (the shared fields — fonts, background,
-resource_policy, comparison, tolerances, viewport — must agree).
+resource_policy, comparison, tolerances, viewport — had to agree).
 
 ### The before-image accommodation (option A)
 
@@ -228,19 +232,20 @@ and a hand-broken output still fails the gate (the
 negative-control test). The narrowing is honest and bounded:
 for the two accommodated classes, the gate no longer
 independently proves that CSS-to-attribute materialization
-and marker expansion preserve rendering; that fidelity is
-covered by the structure cross-check against the Python Core
-(byte-identical outputs and reports on the whole corpus).
-Everything else — paint and all other CSS, which stays in CSS
-form in the before-image — is still compared across forms by
-the gate itself.
+and marker expansion preserve rendering; that fidelity was
+established by the structure cross-check against the Python
+Core (byte-identical outputs and reports on the whole corpus)
+and is now held by the baked structure expectations in the
+pure-TS suites. Everything else — paint and all other CSS,
+which stays in CSS form in the before-image — is still
+compared across forms by the gate itself.
 
-Result: on the 48-case cross-check corpus the two gates'
-verdicts now agree on all 48 cases (structure and gate), and
-all nine corpus SVGs pass the TS normalization end to end.
-`KNOWN_GATE_DIVERGENCES` in `tests/parity.test.mjs` is empty;
-it remains as the enforcement mechanism, so a new disagreement
-fails the cross-check instead of passing silently.
+Result at the time: on the 48-case cross-check corpus the two
+gates' verdicts agreed on all 48 cases (structure and gate),
+and all nine corpus SVGs pass the TS normalization end to end.
+The divergence tag table that enforced this (`KNOWN_GATE_DIVERGENCES`)
+was retired with the parity harness; the gate-accommodation
+tests in `tests/normalize.test.mjs` are the standing coverage.
 
 ## Tests
 
