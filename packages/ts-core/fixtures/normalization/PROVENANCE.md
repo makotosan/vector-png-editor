@@ -20,9 +20,10 @@ at the pinned revision instead.
 repository's reviewed golden structural results: the expected report is an
 analysis-only result (status `failure`, render `not-checked`, no output
 digest) by design — the production normalizer in
-`packages/core/src/vector_png_editor/normalize.py` must reproduce its
-structural output and its analysis-determined report fields exactly, and
-additionally pass the rendering gate before reporting success.
+`packages/ts-core/src/normalize.ts` (the TypeScript port; the Python
+original was retired with the Phase 3 migration, Issue #60) must reproduce
+its structural output and its analysis-determined report fields exactly,
+and additionally pass the rendering gate before reporting success.
 
 Vendored for Issue #48. Do not edit these files to make a test pass; a
 mismatch is a finding about the implementation or about the pinned spec.
