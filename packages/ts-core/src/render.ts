@@ -104,10 +104,44 @@ function assertViewportWithinCaps(width: number, height: number): void {
 
 // The wasm module is initialised once per process; every caller
 // shares the same initialisation promise.
+//
+// A host that cannot rely on resolving @resvg/resvg-wasm from this
+// module's own directory — the VS Code extension, whose bundled
+// entry point lives outside the ts-core package — supplies the wasm
+// explicitly with setWasmSource before the first render. The
+// override is consulted first and the package-relative resolution
+// below is only a fallback for in-repo use (tests, CLI callers).
 let wasmReady: Promise<void> | undefined;
+let wasmSource: string | Uint8Array | undefined;
+
+/**
+ * Supply the resvg wasm binary (a file path or its bytes) for this
+ * process. Must be called before the first render; a call after
+ * initialisation has no effect.
+ */
+export function setWasmSource(source: string | Uint8Array): void {
+  if (wasmReady === undefined) wasmSource = source;
+}
 
 function ensureWasm(): Promise<void> {
   wasmReady ??= (async () => {
+    if (wasmSource !== undefined) {
+      const bytes = typeof wasmSource === 'string'
+        ? new Uint8Array(await readFile(wasmSource))
+        : wasmSource;
+      await initWasm(bytes);
+      return;
+    }
+    // Bundled hosts (esbuild CJS) shim import.meta to an empty
+    // object, so this resolution cannot work there; they always
+    // register a source first. Fail with the reason, not a
+    // createRequire type error.
+    if (typeof import.meta.url !== 'string' || import.meta.url === '') {
+      throw new TsCoreError(
+        'render-failed',
+        'The resvg wasm binary was not supplied: this host must call setWasmSource before rendering',
+      );
+    }
     const require = createRequire(import.meta.url);
     const wasmPath = require.resolve('@resvg/resvg-wasm/index_bg.wasm');
     await initWasm(new Uint8Array(await readFile(wasmPath)));
