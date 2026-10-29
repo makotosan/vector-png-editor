@@ -643,3 +643,12 @@ nonexistent configured Python path as the Effective Python with
 no hint it was invalid; the status now annotates a missing
 configured or effective path with "(file not found)". Full
 results are recorded in docs/TEST_RESULTS.md.
+
+Completion (2026-10-29): the build-14 re-check passed all
+three items - FILL Apply and Normalize SVG now revert with a
+single Cmd+Z (an Export SVG after each undo was byte-identical
+to the pre-edit source), and Environment Status flags the
+missing path with "(file not found)" - and the user declared
+the macOS acceptance complete. Recorded in
+docs/TEST_RESULTS.md and on Issue #18, which stays open for
+the Windows/Linux scope of the stable-release gate.

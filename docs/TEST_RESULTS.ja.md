@@ -7,7 +7,7 @@
 - **マシン：** MacBook Air M4、macOS 26.5.2（25F84）、VS Code 1.144.0（arm64）。システム Python は 3.9.6、実施には Homebrew Python 3.13.16 を使用。
 - **成果物：** エディタ VSIX「ビルド13」（PR #56 時点、Core wheel 同梱。SHA-256 `1a1d37345dea28ece61fdf44bab93bf638f43d9d4ca7c021595b533e5c335f90`、一致）とプレリリース v0.1.0.dev3 の Core wheel（SHA256SUMS 照合 OK）。
 - **実施者：** ユーザーのマシン上の Codex。記入済みチェックリスト v2 を 2026-10-29 にユーザーが提出。
-- **判定：** macOS 受け入れは**未完了**。期待結果と異なった3項目（5.7 の FILL の Undo、6.2 の Normalize の Undo、7.1 の Environment Status）を除き、すべて合格。この3件は実施後に原因を特定し、PR #56 ブランチで修正済み（ビルド14）。再確認が残る。
+- **判定：** macOS 受け入れは**完了**。初回実施（ビルド13）では期待結果と異なった3項目（5.7 の FILL の Undo、6.2 の Normalize の Undo、7.1 の Environment Status）を除き、すべて合格。この3件は原因を特定して PR #56 ブランチで修正し、同日中にビルド14で再確認して合格した（下記「再確認」参照）。2026-10-29 にユーザーが macOS 受け入れの完了を宣言した。
 
 ### セクション別結果
 
@@ -21,8 +21,16 @@
 
 ### 所見と処置
 
-- **F1 — ホスト起点の編集が Cmd+Z で取り消せなかった**（項目 5.7 と 6.2）。webview はホストからのソース更新（Normalize SVG、FILL の Apply、ホスト側 Undo／Redo、外部変更の再読み込み）を Monaco の `editor.setValue()` で適用していたが、これは Undo スタックを破棄する。Monaco で打った編集は通常どおり取り消せる（5.5 は合格）。機構は同梱 Monaco 0.57 で検証済み：`setValue` の変更は取り消し不可だが、`editor.executeEdits()` ＋ `pushUndoStop()` は取り消し可能で、フォーカス時のキーボード Undo でも効く。**修正（PR #56）：** `sourceSync` は `editor.executeEdits('vectorPng.hostSync', …)` と `pushUndoStop()` で適用するよう変更。初回ロードは意図的に `setValue` のままとし、開いた直後のソースが空モデルへ取り消せることはない。ビルド14での再確認が残る。
-- **F2 — Environment Status が存在しない Python を使えるものとして表示した**（項目 7.1）。`vectorPng.corePythonPath` に `/nonexistent/python3` を設定しても、ステータスはそれを Configured／Effective Python として表示し、無効である旨が示されなかった。**修正（PR #56）：** 設定パス／実効パスが存在しない場合、ステータスに「(file not found)」を付ける。ビルド14での再確認が残る。
+- **F1 — ホスト起点の編集が Cmd+Z で取り消せなかった**（項目 5.7 と 6.2）。webview はホストからのソース更新（Normalize SVG、FILL の Apply、ホスト側 Undo／Redo、外部変更の再読み込み）を Monaco の `editor.setValue()` で適用していたが、これは Undo スタックを破棄する。Monaco で打った編集は通常どおり取り消せる（5.5 は合格）。機構は同梱 Monaco 0.57 で検証済み：`setValue` の変更は取り消し不可だが、`editor.executeEdits()` ＋ `pushUndoStop()` は取り消し可能で、フォーカス時のキーボード Undo でも効く。**修正（PR #56）：** `sourceSync` は `editor.executeEdits('vectorPng.hostSync', …)` と `pushUndoStop()` で適用するよう変更。初回ロードは意図的に `setValue` のままとし、開いた直後のソースが空モデルへ取り消せることはない。
+- **F2 — Environment Status が存在しない Python を使えるものとして表示した**（項目 7.1）。`vectorPng.corePythonPath` に `/nonexistent/python3` を設定しても、ステータスはそれを Configured／Effective Python として表示し、無効である旨が示されなかった。**修正（PR #56）：** 設定パス／実効パスが存在しない場合、ステータスに「(file not found)」を付ける。
+
+### 再確認 — 2026-10-29（ビルド14）
+
+ビルド14の VSIX（SHA-256 `2088039b49a3ed131764f4a5de96dcd4b7c31eff777c011b7f1f4e38e9122090`、インストール前に一致を確認）をインストールし、ウィンドウを再読み込みした。期待結果と異なった3項目はすべて合格した。
+
+- **F1、FILL（項目 5.7）：** `#ff0000` を入れて Apply の後、Cmd+Z 1回で fill が元に戻り、その後の Export SVG は元のソースとバイト単位で一致した。
+- **F1、Normalize（項目 6.2）：** `<style>` と `class` を含む SVG で Normalize SVG が要約通知とともに完了し、Cmd+Z 1回の後の Export SVG は正規化前のソースとバイト単位で一致した。
+- **F2（項目 7.1）：** `vectorPng.corePythonPath` に `/nonexistent/python3` を設定すると、Environment Status の Configured と Effective の両行に `/nonexistent/python3 (file not found)` と表示された。確認後、テスト用設定は削除した。
 
 ### 残る受け入れ範囲
 
