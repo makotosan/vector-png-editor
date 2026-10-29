@@ -1000,6 +1000,76 @@ function markerDefinition(
   return { refX, refY, child, paint, unit };
 }
 
+/**
+ * Section 3.1 marker expansion: replace each host's marker-end
+ * with the expanded clone group, in place (the host's marker-end
+ * attribute is consumed for every element, expanded or not).
+ * Shared by the transformation and by the render gate's input
+ * accommodation (see gateInputText): both run this same code
+ * path, including the G2 curved-host tangent rule, so markers
+ * expand identically wherever they are expanded. Returns the
+ * number of markers expanded.
+ */
+function expandMarkers(
+  root: DomElement,
+  ids: Map<string, DomElement>,
+  parent: Map<DomElement, DomElement>,
+  computed: Map<DomElement, Map<string, string>>,
+  markers: Map<DomElement, MarkerDefinition>,
+): number {
+  let expanded = 0;
+  for (const node of [...iterElements(root)]) {
+    const marker = computed.get(node)?.get('marker-end') ?? 'none';
+    node.attrib.delete('marker-end');
+    if (marker === 'none') continue;
+    if (
+      svgLocal(node.tag) !== 'path' ||
+      (computed.get(node)?.get('fill') ?? 'black') !== 'none'
+    ) {
+      fail(
+        'unsupported-css', 'markers',
+        'marker-end hosts must be paths with fill none',
+      );
+    }
+    const src = ids.get(marker.slice(5, -1))!;
+    const definition = markers.get(src)!;
+    const scale =
+      definition.unit === 'strokeWidth'
+        ? scalar(computed.get(node)?.get('stroke-width') ?? '1', 0, undefined, true)
+        : 1;
+    const { points, tangent } = pathPoints(node.get('d') ?? '');
+    const [x, y] = points[points.length - 1];
+    const nodeComputed = computed.get(node);
+    if (
+      (nodeComputed !== undefined &&
+        (nodeComputed.has('opacity') || nodeComputed.has('clip-path'))) ||
+      node.attrib.has('transform')
+    ) {
+      fail(
+        'unsupported-css', 'markers',
+        'Marker host transform, opacity or clip-path is unsupported',
+      );
+    }
+    const angle = Math.atan2(tangent[1], tangent[0]) * (180 / Math.PI);
+    const group = new DomElement(`{${SVG_NS}}g`);
+    group.set(
+      'transform',
+      `translate(${gFormat(x)} ${gFormat(y)}) rotate(${gFormat(angle)}) `
+        + `scale(${gFormat(scale)}) translate(${gFormat(-definition.refX)} ${gFormat(-definition.refY)})`,
+    );
+    group.set('fill', definition.paint);
+    group.set('stroke', 'none');
+    const clone = deepClone(definition.child);
+    clone.attrib.delete('id');
+    clone.set('fill', definition.paint);
+    group.children.push(clone);
+    const container = parent.get(node)!;
+    container.children.splice(container.children.indexOf(node) + 1, 0, group);
+    expanded += 1;
+  }
+  return expanded;
+}
+
 // ------------------------------------------------------------------
 // The report (profile section 7)
 // ------------------------------------------------------------------
@@ -1204,6 +1274,99 @@ function migrateAccessibility(
 // The transform (profile sections 3-5)
 // ------------------------------------------------------------------
 
+/** Where a cascaded winning declaration came from. */
+type ChosenOrigin = 'attribute' | 'rule' | 'inline';
+
+interface ChosenValue {
+  value: string;
+  origin: ChosenOrigin;
+}
+
+interface CascadeResult {
+  computed: Map<DomElement, Map<string, string>>;
+  chosen: Map<DomElement, Map<string, ChosenValue>>;
+}
+
+/**
+ * The section 4 cascade: the winning declaration per element and
+ * property, with its origin, and the computed values (cascade
+ * plus inheritance). Performs every reference check and the
+ * rx/ry element check in the Core's order and mutates nothing in
+ * the tree. Shared by the transformation — which materializes
+ * every winner as a presentation attribute — and by the render
+ * gate, which materializes only the geometry winners resvg
+ * cannot see in CSS (see gateInputText). When `changes` is
+ * given, the inline-style count is recorded in it exactly where
+ * the transformation counts it.
+ */
+function computeCascade(
+  root: DomElement,
+  rules: CssRule[],
+  ids: Map<string, DomElement>,
+  parent: Map<DomElement, DomElement>,
+  budget: Budget,
+  changes: NormalizeChanges | null,
+): CascadeResult {
+  const computed = new Map<DomElement, Map<string, string>>();
+  const chosenByNode = new Map<DomElement, Map<string, ChosenValue>>();
+  for (const node of [...iterElements(root)]) {
+    if (svgLocal(node.tag) === 'style') continue;
+    const ranked = new Map<string, [Rank, ChosenValue]>();
+    for (const [key, val] of node.attrib) {
+      if (PROPS.has(key)) {
+        ranked.set(key, [[0, 0, 0, -1], { value: cssValue(key, val), origin: 'attribute' }]);
+      }
+    }
+    for (const [selectors, decls] of rules) {
+      const specs = selectors
+        .filter((selector) => matchesSelector(selector, node))
+        .map(specificity);
+      if (specs.length > 0) {
+        const maxSpec = specs.reduce((a, b) =>
+          compareRank([0, ...a], [0, ...b]) >= 0 ? a : b,
+        );
+        for (const [prop, val] of decls) {
+          checkRef(prop, val, ids, node, parent);
+          const rank: Rank = [0, ...maxSpec];
+          const current = ranked.get(prop);
+          if (current === undefined || compareRank(rank, current[0]) >= 0) {
+            ranked.set(prop, [rank, { value: val, origin: 'rule' }]);
+          }
+        }
+      }
+    }
+    if (node.attrib.has('style')) {
+      const inline = checkedCss(node.get('style')!);
+      for (const [prop, val] of parseDeclarations(tokenizeCss(inline), budget)) {
+        checkRef(prop, val, ids, node, parent);
+        ranked.set(prop, [[1, 0, 0, 0], { value: val, origin: 'inline' }]);
+      }
+      if (changes !== null) changes.inline_styles += 1;
+    }
+    const chosen = new Map<string, ChosenValue>();
+    for (const [prop, [, entry]] of ranked) {
+      checkRef(prop, entry.value, ids, node, parent);
+      if ((prop === 'rx' || prop === 'ry') && svgLocal(node.tag) !== 'rect') {
+        fail('unsupported-css', 'css', 'CSS rx/ry apply only to rect');
+      }
+      chosen.set(prop, entry);
+    }
+    chosenByNode.set(node, chosen);
+    const values = new Map<string, string>();
+    const parentNode = parent.get(node);
+    const parentComputed =
+      parentNode !== undefined ? computed.get(parentNode) : undefined;
+    if (parentComputed !== undefined) {
+      for (const [key, val] of parentComputed) {
+        if (INHERITED.has(key)) values.set(key, val);
+      }
+    }
+    for (const [key, entry] of chosen) values.set(key, entry.value);
+    computed.set(node, values);
+  }
+  return { computed, chosen: chosenByNode };
+}
+
 export interface NormalizeStructureResult {
   output: Uint8Array;
   report: ConversionReport;
@@ -1241,58 +1404,16 @@ export function normalizeStructure(source: Uint8Array): NormalizeStructureResult
   for (const [, decls] of rules) {
     for (const [prop, val] of decls) checkRefTarget(prop, val, ids);
   }
-  const computed = new Map<DomElement, Map<string, string>>();
+  const { computed, chosen } = computeCascade(
+    root, rules, ids, parent, budget, changes,
+  );
   for (const node of [...iterElements(root)]) {
     if (svgLocal(node.tag) === 'style') continue;
-    const chosen = new Map<string, [Rank, string]>();
-    for (const [key, val] of node.attrib) {
-      if (PROPS.has(key)) chosen.set(key, [[0, 0, 0, -1], cssValue(key, val)]);
+    const nodeChosen = chosen.get(node)!;
+    for (const [prop, entry] of nodeChosen) {
+      node.set(prop, entry.value);
     }
-    for (const [selectors, decls] of rules) {
-      const specs = selectors
-        .filter((selector) => matchesSelector(selector, node))
-        .map(specificity);
-      if (specs.length > 0) {
-        const maxSpec = specs.reduce((a, b) =>
-          compareRank([0, ...a], [0, ...b]) >= 0 ? a : b,
-        );
-        for (const [prop, val] of decls) {
-          checkRef(prop, val, ids, node, parent);
-          const rank: Rank = [0, ...maxSpec];
-          const current = chosen.get(prop);
-          if (current === undefined || compareRank(rank, current[0]) >= 0) {
-            chosen.set(prop, [rank, val]);
-          }
-        }
-      }
-    }
-    if (node.attrib.has('style')) {
-      const inline = checkedCss(node.get('style')!);
-      for (const [prop, val] of parseDeclarations(tokenizeCss(inline), budget)) {
-        checkRef(prop, val, ids, node, parent);
-        chosen.set(prop, [[1, 0, 0, 0], val]);
-      }
-      changes.inline_styles += 1;
-    }
-    for (const [prop, [, val]] of chosen) {
-      checkRef(prop, val, ids, node, parent);
-      if ((prop === 'rx' || prop === 'ry') && svgLocal(node.tag) !== 'rect') {
-        fail('unsupported-css', 'css', 'CSS rx/ry apply only to rect');
-      }
-      node.set(prop, val);
-    }
-    changes.applied_declarations += chosen.size;
-    const values = new Map<string, string>();
-    const parentNode = parent.get(node);
-    const parentComputed =
-      parentNode !== undefined ? computed.get(parentNode) : undefined;
-    if (parentComputed !== undefined) {
-      for (const [key, val] of parentComputed) {
-        if (INHERITED.has(key)) values.set(key, val);
-      }
-    }
-    for (const [key, [, val]] of chosen) values.set(key, val);
-    computed.set(node, values);
+    changes.applied_declarations += nodeChosen.size;
     if (node.attrib.has('class')) {
       changes.class_attributes += 1;
       node.attrib.delete('class');
@@ -1308,55 +1429,7 @@ export function normalizeStructure(source: Uint8Array): NormalizeStructureResult
   const accessibility = migrateAccessibility(
     root, ids, locations, originalText, originalAria,
   );
-  for (const node of [...iterElements(root)]) {
-    const marker = computed.get(node)?.get('marker-end') ?? 'none';
-    node.attrib.delete('marker-end');
-    if (marker === 'none') continue;
-    if (
-      svgLocal(node.tag) !== 'path' ||
-      (computed.get(node)?.get('fill') ?? 'black') !== 'none'
-    ) {
-      fail(
-        'unsupported-css', 'markers',
-        'marker-end hosts must be paths with fill none',
-      );
-    }
-    const src = ids.get(marker.slice(5, -1))!;
-    const definition = markers.get(src)!;
-    const scale =
-      definition.unit === 'strokeWidth'
-        ? scalar(computed.get(node)?.get('stroke-width') ?? '1', 0, undefined, true)
-        : 1;
-    const { points, tangent } = pathPoints(node.get('d') ?? '');
-    const [x, y] = points[points.length - 1];
-    const nodeComputed = computed.get(node);
-    if (
-      (nodeComputed !== undefined &&
-        (nodeComputed.has('opacity') || nodeComputed.has('clip-path'))) ||
-      node.attrib.has('transform')
-    ) {
-      fail(
-        'unsupported-css', 'markers',
-        'Marker host transform, opacity or clip-path is unsupported',
-      );
-    }
-    const angle = Math.atan2(tangent[1], tangent[0]) * (180 / Math.PI);
-    const group = new DomElement(`{${SVG_NS}}g`);
-    group.set(
-      'transform',
-      `translate(${gFormat(x)} ${gFormat(y)}) rotate(${gFormat(angle)}) `
-        + `scale(${gFormat(scale)}) translate(${gFormat(-definition.refX)} ${gFormat(-definition.refY)})`,
-    );
-    group.set('fill', definition.paint);
-    group.set('stroke', 'none');
-    const clone = deepClone(definition.child);
-    clone.attrib.delete('id');
-    clone.set('fill', definition.paint);
-    group.children.push(clone);
-    const container = parent.get(node)!;
-    container.children.splice(container.children.indexOf(node) + 1, 0, group);
-    changes.expanded_markers += 1;
-  }
+  changes.expanded_markers += expandMarkers(root, ids, parent, computed, markers);
   for (const node of [...iterElements(root)]) {
     for (const child of [...node.children]) {
       const local = svgLocal(child.tag);
