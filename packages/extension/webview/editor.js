@@ -374,7 +374,22 @@ window.addEventListener('message', (event) => {
   } else if (message.type === 'sourceSync') {
     if (editor && editor.getValue() !== message.source) {
       applyingHostUpdate = true;
-      editor.setValue(message.source);
+      const model = editor.getModel();
+      if (model) {
+        // Apply host-originated changes (Normalize SVG, FILL Apply,
+        // host undo/redo, external-change reloads) as an undoable
+        // Monaco edit, NOT via setValue: setValue discards the undo
+        // stack, which made those edits impossible to undo with
+        // Cmd+Z in the code area (macOS acceptance findings on
+        // checklist items 5.7 and 6.2, Issue #18; mechanism verified
+        // against the bundled Monaco). The initial load in the init
+        // handler still uses setValue on purpose - the freshly
+        // loaded source must not be undoable back to an empty model.
+        editor.executeEdits('vectorPng.hostSync', [{ range: model.getFullModelRange(), text: message.source }]);
+        editor.pushUndoStop();
+      } else {
+        editor.setValue(message.source);
+      }
       applyingHostUpdate = false;
     }
     scheduleSvgPreview();
