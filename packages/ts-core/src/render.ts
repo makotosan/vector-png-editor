@@ -64,6 +64,16 @@ export interface RenderOptions {
   defaultFontFamily?: string;
   /** resvg sansSerifFamily; the spike's default is "Noto Sans". */
   sansSerifFamily?: string;
+  /**
+   * Skip the conservative external-reference scan above. Only
+   * for callers whose input has already passed a check that
+   * rejects every real external reference — the normalization
+   * gate (src/normalize.ts), whose section 2 inspection refuses
+   * external references in attributes and CSS values before the
+   * gate runs. Without the skip, reference-shaped strings in
+   * text content would refuse a render the gate should perform.
+   */
+  skipExternalReferenceScan?: boolean;
 }
 
 export interface RenderedPng {
@@ -158,7 +168,7 @@ function ensureWasm(): Promise<void> {
  * a different size than requested.
  */
 export async function renderSvgToPng(source: string, options: RenderOptions): Promise<RenderedPng> {
-  assertNoExternalReferences(source);
+  if (!options.skipExternalReferenceScan) assertNoExternalReferences(source);
   assertViewportWithinCaps(options.width, options.height);
   await ensureWasm();
   const family = options.defaultFontFamily ?? 'Noto Sans';

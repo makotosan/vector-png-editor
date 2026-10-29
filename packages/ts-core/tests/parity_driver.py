@@ -11,17 +11,21 @@ attribute fixtures, the whole catalog).
 Manifest:
   {"svg": [{"id": ..., "source_base64": ...}],
    "png": [{"id": ..., "png_base64": ...}],
-   "build": {"source_base64": ..., "width": W, "height": H} | null}
+   "build": {"source_base64": ..., "width": W, "height": H} | null,
+   "normalize": [{"id": ..., "source_base64": ...}]}
 
 Results:
   {"svg": {id: {"validate": {...}, "profile": {...},
                 "profile_strict": {...}}},
    "png": {id: {"read": {...}, "inspect": {...}, "extract": {...}}},
-   "build": {"png_base64": ...} | {"error": ...} | null}
+   "build": {"png_base64": ...} | {"error": ...} | null,
+   "normalize": {id: {"structure": {...}, "gated": {...}}}}
 
 Every outcome is {"ok": true, ...} or
 {"ok": false, "code": ..., "message": ...} (CoreError), so the Node
 side can diff verdicts, codes, messages and full diagnostics.
+Normalize outcomes add the failure "stage" (structure) and the
+section 7 "report" (gated failures carry it in the error details).
 
 Run with the Core sources on PYTHONPATH (the Node test arranges
 that): PYTHONPATH=packages/core/src /tmp/buildenv/bin/python \
@@ -40,6 +44,11 @@ from vector_png_editor.document import (
     read_document_bytes,
 )
 from vector_png_editor.errors import CoreError
+from vector_png_editor.normalize import (
+    NormalizeFailure,
+    normalize_document,
+    normalize_structure,
+)
 from vector_png_editor.profile_check import check_profile
 from vector_png_editor.svg import validate_source
 
@@ -97,14 +106,69 @@ def png_outcomes(data, workdir):
     }
 
 
+def normalize_outcomes(source, workdir, index):
+    def structure():
+        output, report = normalize_structure(source)
+        return {
+            "output_base64": base64.b64encode(output).decode(),
+            "report": report,
+        }
+
+    def structure_outcome():
+        try:
+            return {"ok": True, "value": structure()}
+        except NormalizeFailure as exc:
+            return {
+                "ok": False,
+                "code": exc.code,
+                "stage": exc.stage,
+                "message": str(exc),
+            }
+        except Exception as exc:
+            return {"fatal": f"{type(exc).__name__}: {exc}"}
+
+    def gated_outcome():
+        case_dir = workdir / f"gated-{index}"
+        case_dir.mkdir(exist_ok=True)
+        src = case_dir / "in.svg"
+        src.write_bytes(source)
+        try:
+            report = normalize_document(
+                src, case_dir / "out.svg", case_dir / "report.json"
+            )
+            return {
+                "ok": True,
+                "output_base64": base64.b64encode(
+                    (case_dir / "out.svg").read_bytes()
+                ).decode(),
+                "report": report,
+            }
+        except CoreError as exc:
+            return {
+                "ok": False,
+                "code": exc.code,
+                "message": str(exc),
+                "report": (exc.details or {}).get("report"),
+            }
+        except Exception as exc:
+            return {"fatal": f"{type(exc).__name__}: {exc}"}
+
+    return {"structure": structure_outcome(), "gated": gated_outcome()}
+
+
 def main():
     manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
-    results = {"svg": {}, "png": {}, "build": None}
+    results = {"svg": {}, "png": {}, "build": None, "normalize": {}}
     for case in manifest.get("svg", []):
         source = base64.b64decode(case["source_base64"])
         results["svg"][case["id"]] = svg_outcomes(source)
     with tempfile.TemporaryDirectory() as tmp:
         workdir = Path(tmp)
+        for index, case in enumerate(manifest.get("normalize", [])):
+            source = base64.b64decode(case["source_base64"])
+            results["normalize"][case["id"]] = normalize_outcomes(
+                source, workdir, index
+            )
         for case in manifest.get("png", []):
             data = base64.b64decode(case["png_base64"])
             results["png"][case["id"]] = png_outcomes(data, workdir)

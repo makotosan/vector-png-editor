@@ -4,6 +4,10 @@
 // catalog inputs, the Core tests' own cases, and crafted edge cases
 // for both the container and the validator (positions, namespace
 // expansion, traversal order, zlib stream exactness, ...).
+// The normalization section additionally compares the normalizer's
+// output bytes and section 7 reports exactly, and the gated verdicts
+// across engines (Cairo vs resvg) with the known renderer-semantics
+// divergences tagged per case — see KNOWN_GATE_DIVERGENCES.
 //
 // This is port verification, not renderer-conformance work: no
 // pixels are compared. Gated on a Python with the Core's
@@ -29,7 +33,14 @@ import {
   rebuildVectorPng,
 } from '../src/container.ts';
 import { checkProfile, validateSource } from '../src/validate.ts';
+import {
+  NormalizeFailure,
+  NormalizeRejection,
+  normalizeDocument,
+  normalizeStructure,
+} from '../src/normalize.ts';
 import { TsCoreError } from '../src/errors.ts';
+import { loadSpikeFonts } from './test-fonts.mjs';
 import {
   assemble,
   ihdr,
@@ -514,4 +525,202 @@ parityTest('a Python-built vector-png parses identically and rebuilds byte-exact
   );
   assert.deepEqual(Buffer.from(parseDocument(assembled).source), Buffer.from(buildSource));
   assert.equal(inspectDocument(assembled).kind, 'vector-png');
+});
+
+// ----------------------------------------------------------------
+// Normalization cases (structure + gated entry point)
+// ----------------------------------------------------------------
+
+async function buildNormalizeCases() {
+  const cases = new Map();
+  const add = (id, source) => cases.set(id, source);
+
+  const normDir = join(repoRoot, 'packages/core/tests/fixtures/normalization');
+  const normCases = JSON.parse(await readFile(join(normDir, 'cases.json'), 'utf8'));
+  for (const c of normCases) add(`norm:${c.id}`, enc(c.input));
+  add('nameplate:input', await readFile(join(normDir, 'nameplate.input.svg')));
+  add('nameplate:expected', await readFile(join(normDir, 'nameplate.expected.svg')));
+
+  const corpusDir = join(dirname(repoRoot), 'user/files');
+  if (existsSync(corpusDir)) {
+    for (const name of (await readdir(corpusDir)).filter((n) => n.endsWith('.svg')).sort()) {
+      add(`corpus:${name}`, await readFile(join(corpusDir, name)));
+    }
+  }
+
+  // Crafted edge cases: ElementTree serialization details (comment
+  // merging, character references, BOM + declaration), the namespace
+  // failure wordings expat produces, marker clone tails, and the
+  // Issue #59 stroke="none" decision case.
+  const X = {
+    'stroke-none-marker':
+      '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><defs>' +
+      '<marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">' +
+      '<path d="M0,0 L12,6 L0,12 Z" fill="black"/></marker></defs>' +
+      '<path d="M5 20 H50" fill="none" stroke="none" marker-end="url(#a)"/></svg>',
+    'g-format':
+      '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><defs>' +
+      '<marker id="a" markerWidth="7.5" markerHeight="3.25" refX="0" refY="0" orient="auto">' +
+      '<path d="M0,0 L7.5,1.625 L0,3.25 Z" fill="red"/></marker></defs>' +
+      '<path d="M1.5 2.25 L30.75 9.125" fill="none" stroke="black" stroke-width="0.5" marker-end="url(#a)"/></svg>',
+    'cdata-comment':
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+      '<desc>ab<!-- x -->cd</desc><style><![CDATA[.a{fill:red}]]></style>' +
+      '<rect class="a" width="5" height="5"/></svg>',
+    'text-entities':
+      '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">' +
+      '<desc>a &amp; b &lt;c&gt; &#65;&#x42;</desc><rect width="5" height="5"/></svg>',
+    'bom-decl':
+      '\ufeff<?xml version="1.0" encoding="UTF-8"?>' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="4" height="4"><rect width="4" height="4"/></svg>',
+    'deep-clone-tail':
+      '<svg xmlns="http://www.w3.org/2000/svg" width="60" height="40"><defs>' +
+      '<marker id="a" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">' +
+      '<path d="M0,0 L12,6 L0,12 Z" fill="black"/> </marker></defs>' +
+      '<path d="M5 20 H50" fill="none" marker-end="url(#a)"/></svg>',
+    'nested-svg': '<svg xmlns="http://www.w3.org/2000/svg"><svg width="5"/></svg>',
+    'unbound-prefix': '<svg xmlns="http://www.w3.org/2000/svg"><p:path d="M0 0"/></svg>',
+    'dup-expanded':
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:p="urn:x" xmlns:q="urn:x" p:a="1" q:a="2"/>',
+    'empty-prefix': '<svg xmlns="http://www.w3.org/2000/svg" xmlns:p=""><rect width="1"/></svg>',
+    // Reference-shaped TEXT content is not a reference: the gate
+    // must still render it (the section 2 inspection, not a raw
+    // scan, is what refuses real external references).
+    'text-url-mention':
+      '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="30">' +
+      '<style>.a {fill: black}</style><text class="a" x="2" y="20">url(http://example.com)</text></svg>',
+  };
+  for (const [id, source] of Object.entries(X)) add(`extra:${id}`, enc(source));
+  return cases;
+}
+
+// Gate divergences that are renderer semantics, not port bugs. In
+// each case the structure outputs are byte-identical (asserted by
+// the structure test) and the Python gate passes on CairoSVG, while
+// the TS gate honestly reports render-mismatch on resvg:
+// - css-rx: resvg ignores the SVG2 geometry properties rx/ry when
+//   they arrive via CSS; materializing them as attributes (what the
+//   transformation does) turns square corners round under resvg.
+//   CairoSVG applies them in both forms, so its gate is unaffected.
+// - marker-raster: resvg rasterizes a native marker and the spec's
+//   expanded <g> clone with slightly different antialiasing (edge
+//   deltas up to ~46/255 on the iso7010 arrowheads). With marker
+//   rendering factored out, before/after renders are pixel-equal.
+// - stroke-none: the Issue #59 decision — resvg does not paint
+//   native markers on stroke="none" hosts (CairoSVG paints them);
+//   the transformation mirrors Python exactly and the expanded
+//   clone IS painted, so the within-resvg gate reports a mismatch.
+// Renderer-conformance records are Issue #61's deferred scope; this
+// table records the divergences so any NEW disagreement fails here.
+const KNOWN_GATE_DIVERGENCES = {
+  'extra:stroke-none-marker': 'stroke-none',
+  'extra:g-format': 'marker-raster',
+  'extra:deep-clone-tail': 'stroke-none',
+  'norm:rounded-diagram-arrows': 'css-rx',
+  'corpus:eu-product-framework-timeline.svg': 'css-rx',
+  'corpus:pld-timeline.svg': 'css-rx',
+  'corpus:residual-risk-reassessment-flow.svg': 'css-rx',
+  'corpus:safety-information-traceability.svg': 'css-rx',
+  'corpus:iso7010-global-alignment.svg': 'marker-raster',
+  'corpus:iso7010-update-cycle.svg': 'marker-raster',
+};
+
+/** Split a section 7 report into the part that must be identical
+ * across engines and the render block, whose engine-specific fields
+ * (renderer, renderer_version, color_alpha, text_policy) are
+ * reported, not equated; the shared fields and viewport must agree. */
+function splitReport(report) {
+  if (report === null || typeof report.render !== 'object' || report.render === null) {
+    return { rest: report, render: null };
+  }
+  const { render, ...rest } = report;
+  const { renderer, renderer_version, color_alpha, text_policy, ...shared } = render;
+  return {
+    rest,
+    render: { shared, engine: { renderer, renderer_version, color_alpha, text_policy } },
+  };
+}
+
+let normalizeResultsPromise;
+async function runNormalizeDriver(cases) {
+  // Both normalize tests consume the same driver run (the Python
+  // gate renders every case; once per suite is enough).
+  normalizeResultsPromise ??= runDriver({
+    svg: [],
+    png: [],
+    build: null,
+    normalize: [...cases].map(([id, source]) => ({ id, source_base64: b64(source) })),
+  }).then((results) => results.normalize);
+  return normalizeResultsPromise;
+}
+
+parityTest('TS and Python agree on normalization structure (verdict, code, bytes, report)', async () => {
+  const cases = await buildNormalizeCases();
+  const py = await runNormalizeDriver(cases);
+  let checked = 0;
+  for (const [id, source] of cases) {
+    const expected = py[id]?.structure;
+    assert.ok(expected, `driver returned no structure result for ${id}`);
+    assert.equal(expected.fatal, undefined, `${id}: Python raised unexpectedly: ${expected.fatal}`);
+    let actual;
+    try {
+      const { output, report } = normalizeStructure(source);
+      actual = { ok: true, output_base64: b64(output), report };
+    } catch (error) {
+      assert.ok(error instanceof NormalizeFailure, `${id}: unexpected error ${error}`);
+      actual = { ok: false, code: error.code, stage: error.stage, message: error.message };
+    }
+    assert.equal(actual.ok, expected.ok, `${id}: verdict differs`);
+    if (expected.ok) {
+      assert.equal(actual.output_base64, expected.value.output_base64, `${id}: output bytes differ`);
+      assert.deepEqual(actual.report, expected.value.report, `${id}: reports differ`);
+    } else {
+      assert.equal(actual.code, expected.code, `${id}: codes differ`);
+      assert.equal(actual.stage, expected.stage, `${id}: stages differ`);
+      assert.equal(actual.message, expected.message, `${id}: messages differ`);
+    }
+    checked += 1;
+  }
+  assert.ok(checked >= 40, `expected the full normalize corpus, got ${checked}`);
+});
+
+parityTest('TS and Python gates agree, modulo the tagged renderer divergences', async () => {
+  const cases = await buildNormalizeCases();
+  const py = await runNormalizeDriver(cases);
+  const fonts = await loadSpikeFonts();
+  for (const [id, source] of cases) {
+    const expected = py[id]?.gated;
+    assert.ok(expected, `driver returned no gated result for ${id}`);
+    assert.equal(expected.fatal, undefined, `${id}: Python raised unexpectedly: ${expected.fatal}`);
+    let actual;
+    try {
+      const { output, report } = await normalizeDocument(source, { fonts });
+      actual = { ok: true, output_base64: b64(output), report };
+    } catch (error) {
+      assert.ok(error instanceof NormalizeRejection, `${id}: unexpected error ${error}`);
+      actual = { ok: false, code: error.code, message: error.message, report: error.report };
+    }
+    if (id in KNOWN_GATE_DIVERGENCES) {
+      // Python passes; the TS gate reports the render difference
+      // its engine actually produces. Nothing else may diverge.
+      assert.equal(expected.ok, true, `${id}: tagged divergence expects a Python pass`);
+      assert.equal(actual.ok, false, `${id}: tagged divergence expects a TS gate failure`);
+      assert.equal(actual.code, 'render-mismatch', `${id}: divergence code`);
+      assert.equal(actual.report.checks.render, 'mismatch', `${id}: divergence check`);
+      continue;
+    }
+    assert.equal(actual.ok, expected.ok, `${id}: gate verdicts differ (ts=${actual.ok ? 'ok' : actual.code} py=${expected.ok ? 'ok' : expected.code})`);
+    if (expected.ok) {
+      assert.equal(actual.output_base64, expected.output_base64, `${id}: gated output bytes differ`);
+    } else {
+      assert.equal(actual.code, expected.code, `${id}: gate failure codes differ`);
+      if (actual.code !== 'render-error' && actual.code !== 'render-mismatch') {
+        assert.equal(actual.message, expected.message, `${id}: gate failure messages differ`);
+      }
+    }
+    const tsSplit = splitReport(actual.report);
+    const pySplit = splitReport(expected.report);
+    assert.deepEqual(tsSplit.rest, pySplit.rest, `${id}: gated reports differ outside the render block`);
+    assert.deepEqual(tsSplit.render?.shared, pySplit.render?.shared, `${id}: gated render blocks differ outside the engine fields`);
+  }
 });
