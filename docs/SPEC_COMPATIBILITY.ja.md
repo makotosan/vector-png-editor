@@ -4,7 +4,7 @@
 
 ## 基準と主張
 
-[12994c57121b759c835ee28cd25b88c12f67463c](https://github.com/makotosan/vector-png-spec/tree/12994c57121b759c835ee28cd25b88c12f67463c)の英語SPEC.mdが正規仕様、SPEC.ja.mdは全文の参考訳です。[spec-reference.json](../spec-reference.json)と[implementation-reference.json](../implementation-reference.json)を参照してください。これは過去の上流調査と[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)・[CLI.ja.md](CLI.ja.md)に記録した現在の実験的Core作業を扱います。新CoreはXML不足3点を解消し、受動発見とprofile／描画を分離し、PNG／rasterの明示検査を追加しましたが、ancillary／language／raster監査は未完了です。完全準拠は主張しません。wire v1は変更せず、既存ファイルの形式移行は不要です。
+[12994c57121b759c835ee28cd25b88c12f67463c](https://github.com/makotosan/vector-png-spec/tree/12994c57121b759c835ee28cd25b88c12f67463c)の英語SPEC.mdが正規仕様、SPEC.ja.mdは全文の参考訳です。[spec-reference.json](../spec-reference.json)と[implementation-reference.json](../implementation-reference.json)を参照してください。これは過去の上流調査と[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)・廃止されたCLI文書に記録した現在の実験的Core作業を扱います。新CoreはXML不足3点を解消し、受動発見とprofile／描画を分離し、PNG／rasterの明示検査を追加しましたが、ancillary／language／raster監査は未完了です。完全準拠は主張しません。wire v1は変更せず、既存ファイルの形式移行は不要です。
 
 ## 過去の上流要件の状態
 
@@ -28,7 +28,7 @@
 
 現在の書込範囲（SPEC §§3〜7）：変更しないUTF-8原文の正規圧縮iTXt、IHDR viewport生成、候補検証と厳密なローカルRGBA8検証、明示上書き・バックアップ、協調競合制御を実装しました。任意の外部ライターとの競合、クラッシュ耐久性、エディター保存は残り、[WRITING.ja.md](WRITING.ja.md)を参照してください。wire・固定基準の変更や完全準拠の主張はありません。
 
-bridge追加：0.1.0.dev3でprotocol-1 stdin要求、正確なinline原文、厳密な上限付きdecode、TypeScript制御・古い結果の拒否、読み取り専用環境診断を実装しました。[BRIDGE.ja.md](BRIDGE.ja.md)を参照してください。ファイル形式、renderer方針、仕様固定、書込競合制御は変更しません。P1-04のnative・推移的依存固定、穏当なworker取消、描画出力上限、更新・切り戻しは残ります。
+bridge追加：0.1.0.dev3でprotocol-1 stdin要求、正確なinline原文、厳密な上限付きdecode、TypeScript制御・古い結果の拒否、読み取り専用環境診断を実装しました。詳細は廃止されたBRIDGE文書に記録しました。ファイル形式、renderer方針、仕様固定、書込競合制御は変更しません。P1-04のnative・推移的依存固定、穏当なworker取消、描画出力上限、更新・切り戻しは残ります。
 
 専用環境管理の追加：別のTypeScript APIで、レビューしたPythonアプリ依存のversion lockの導入、新しい不変venvの健全性検査、atomic有効化、検証済み切り戻しに対応しました。[INSTALL.ja.md](INSTALL.ja.md)を参照してください。native・成果物hash、VS Code setup・dirty編集連携、完全なrenderer制御は残ります。wire v1、仕様固定、Coreライター、standalone pipの既定依存動作は変更しません。
 

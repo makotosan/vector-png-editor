@@ -4,7 +4,7 @@
 
 ## Baseline and claims
 
-English SPEC.md at [12994c57121b759c835ee28cd25b88c12f67463c](https://github.com/makotosan/vector-png-spec/tree/12994c57121b759c835ee28cd25b88c12f67463c) is normative; SPEC.ja.md is a full informative translation. See [spec-reference.json](../spec-reference.json) and [implementation-reference.json](../implementation-reference.json). This records historical upstream research plus current experimental Core work in [CORE_PROGRESS.md](CORE_PROGRESS.md) and [CLI.md](CLI.md). The new Core resolves the three XML gaps, separates passive discovery from profile/rendering and adds explicit PNG/raster checks; ancillary/language/raster audits remain open. No complete conformance is claimed. Wire v1 is unchanged. Existing files need no format migration.
+English SPEC.md at [12994c57121b759c835ee28cd25b88c12f67463c](https://github.com/makotosan/vector-png-spec/tree/12994c57121b759c835ee28cd25b88c12f67463c) is normative; SPEC.ja.md is a full informative translation. See [spec-reference.json](../spec-reference.json) and [implementation-reference.json](../implementation-reference.json). This records historical upstream research plus current experimental Core work in [CORE_PROGRESS.md](CORE_PROGRESS.md) and the retired CLI document. The new Core resolves the three XML gaps, separates passive discovery from profile/rendering and adds explicit PNG/raster checks; ancillary/language/raster audits remain open. No complete conformance is claimed. Wire v1 is unchanged. Existing files need no format migration.
 
 ## Historical upstream requirement status
 
@@ -28,7 +28,7 @@ These rows describe the original upstream baseline. For the new package, the thr
 
 Current writer scope (SPEC §§3–7): unchanged UTF-8 source in canonical compressed iTXt, IHDR viewport generation, validated candidate and exact local RGBA8 verification, explicit overwrite/backup and cooperative conflicts are implemented. Arbitrary external-writer races, crash durability and editor saves remain open; see [WRITING.md](WRITING.md). No wire/pin change or complete-conformance claim.
 
-Bridge follow-up: protocol-1 stdin requests, inline exact source, strict bounded decoding, TypeScript orchestration/stale-result rejection and read-only environment health checks are implemented in 0.1.0.dev3. See [BRIDGE.md](BRIDGE.md). No file-format, renderer policy, specification pin or writer concurrency change; P1-04 native/transitive locking, graceful worker cancellation, bounded renderer output and upgrade/rollback remain open.
+Bridge follow-up: protocol-1 stdin requests, inline exact source, strict bounded decoding, TypeScript orchestration/stale-result rejection and read-only environment health checks are implemented in 0.1.0.dev3. Details were recorded in the retired BRIDGE document. No file-format, renderer policy, specification pin or writer concurrency change; P1-04 native/transitive locking, graceful worker cancellation, bounded renderer output and upgrade/rollback remain open.
 
 Managed-environment follow-up: a separate TypeScript API now installs the reviewed Python application-dependency version lock, health-checks new immutable venvs, activates them atomically and supports validated rollback; see [INSTALL.md](INSTALL.md). Native/artifact hashing, VS Code setup/dirty-edit integration and full renderer controls remain open. This does not change wire v1, the specification pin, the Core writer or default standalone pip dependency behavior.
 

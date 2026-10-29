@@ -2,13 +2,11 @@
 
 [日本語](README.ja.md)
 
-VS Code Extension + Python Core + independent pip CLI for editing SVG embedded in PNG. SVG is authoritative; PNG raster is derived. Status: experimental Phase 1 Core with inspect/extract/validate/build/verify/rebuild; the VS Code editor and stable release are not implemented.
+VS Code extension for editing SVG embedded in PNG. The Core (packages/ts-core) runs in-process in the extension host, in TypeScript; there is no Python component and no standalone CLI. SVG is authoritative; PNG raster is derived. Status: experimental; the editor provides inspect/extract/validate/build/rebuild, svg-normalization-v1 and resvg rendering on the TypeScript Core, and the stable-release gates in the acceptance record remain open.
 
-- [Managed Python setup and rollback](docs/INSTALL.md)
-- [JSON bridge and environment diagnosis](docs/BRIDGE.md)
+- [Installation (no Python, no setup)](docs/INSTALL.md)
 - [Writing and conflict boundaries](docs/WRITING.md)
-- [Current Core progress and evidence](docs/CORE_PROGRESS.md)
-- [Operational JSON CLI contract](docs/CLI.md)
+- [Python Core progress and evidence (historical)](docs/CORE_PROGRESS.md)
 - [Phase 0 findings](docs/PHASE0.md)
 - [Architecture and finalized product requirements](docs/ARCHITECTURE.md)
 - [Compatibility record](docs/SPEC_COMPATIBILITY.md)

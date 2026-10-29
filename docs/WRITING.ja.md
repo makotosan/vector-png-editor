@@ -29,6 +29,6 @@ buildは変更しないUTF-8原文バイトを受け取り、safe-svg-v1を検�
 
 ## エラー、上限と検証根拠
 
-追加終了コードは12 render-mismatch、13 conflict、14 cancelled（処理したKeyboardInterrupt）です。既存の[CLI契約](CLI.ja.md)を補います。強制プロセス終了は処理可能な取消ではなく、一時ファイルや古いロックが残り得ます。atomic公開境界の後の取消では、完全なファイルがすでに確定している場合があります。bridge取消とsubprocess出力の上限制御はP1-04に残ります。描画は既存のsubprocess 20秒timeoutとnative依存・安全性の制限を使用し、OS sandboxや厳密なmemory quotaはありません。原文／PNG／画素／複雑度上限は変更しません。safe profile拒否、描画timeout、模擬ディスク失敗、候補不一致、公開前中断について元ファイル保持をテストします。
+追加終了コードは12 render-mismatch、13 conflict、14 cancelled（処理したKeyboardInterrupt）です。既存のCLI契約を補います。強制プロセス終了は処理可能な取消ではなく、一時ファイルや古いロックが残り得ます。atomic公開境界の後の取消では、完全なファイルがすでに確定している場合があります。bridge取消とsubprocess出力の上限制御はP1-04に残ります。描画は既存のsubprocess 20秒timeoutとnative依存・安全性の制限を使用し、OS sandboxや厳密なmemory quotaはありません。原文／PNG／画素／複雑度上限は変更しません。safe profile拒否、描画timeout、模擬ディスク失敗、候補不一致、公開前中断について元ファイル保持をテストします。
 
 テストはUnicode／BOM／CRLF原文往復、build／verify／rebuild、コンテナーと比較の結果を分離した異なるraster、明示上書きとバックアップ、古いリビジョン、協調ロック、並行作成された新規出力、置換前に検出した外部変更、通常PNGの拒否を対象とします。clean wheelのsmoke検証はソースツリー外で6コマンドすべてを実行します。hosted CIはOS／Pythonの9組を保持し、Core CIをPRとmain pushで実行して、同名の必須チェックを持つfeature branch push／PRの二重実行を避けます。現在の実行根拠は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)に記録し、workflowの存在を成功結果とはしません。形式の完全準拠、任意ライターとの競合制御、実機エディター受け入れ完了は主張しません。

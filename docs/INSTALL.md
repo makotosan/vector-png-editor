@@ -1,45 +1,40 @@
-# Experimental managed Python environments
+# Installing the Vector PNG Editor
 
 [日本語](INSTALL.ja.md)
 
-## Scope and prerequisites
+## Install from a release
 
-packages/bridge/src/environment.ts provides prepareEnvironment, activeEnvironment, runManagedCore and rollbackEnvironment. Since P2-07 the VS Code extension integrates this manager with automatic Python discovery and user-facing setup commands (below). Native Cairo installation, VSIX bundling of the Core wheel, extension-host tests and release manifests remain open; the complete product and stable release are not finished.
+Download the `.vsix` from the GitHub Release and install it in VS Code:
 
-Use a trusted absolute Python executable path, Python 3.11–3.13, native Cairo configured for that interpreter, a trusted vector-png-editor-core pure-Python wheel, and this repository's [requirements.lock](../requirements.lock). Both wheel and lock require expected lowercase SHA-256 digests supplied by trusted caller configuration; a digest computed from an arbitrary download does not authenticate it. Node 24 is used for runtime tests with built-in TypeScript type stripping; no static type-check/build or VS Code Node compatibility claim. No bundled Python/native libraries/fonts are installed by this API.
+```sh
+code --install-extension vector-png-editor-<version>.vsix
+```
 
-The lock fixes all nine application runtime dependency versions tested by the manager: Pillow 13.0.0, CairoSVG 2.9.1, defusedxml 0.7.1, cairocffi 1.7.1, cffi 2.1.1, cssselect2 0.10.1, tinycss2 1.5.1, pycparser 3.12 and webencodings 0.6.1. It is a version lock, not a hash lock for dependency wheels. Python, native Cairo, fonts and bootstrap pip/setuptools are outside it. The installed Core version must exactly match the selected wheel version. Ordinary pip installation of the Core still uses its direct pins; it does not automatically apply this separate manager lock. Change the lock deliberately with review and OS/Python tests, not automatic upstream following.
+(or use "Extensions: Install from VSIX..." in the Command Palette). That is the whole installation. There is no environment setup step, and the extension asks for no further downloads.
 
-## Prepare and use an environment
+## Requirements
 
-The API takes root (an absolute application-owned private storage directory), python (absolute executable), wheel, wheelSha256, version, requirements, requirementsSha256 and optional allowNetwork, wheelhouse, env, signal and onProgress. The version currently accepts major.minor.patch with optional .devN, and the Core artifact is installed under its pure-Python wheel name. Default setup is offline; an optional local wheelhouse supplies wheels. allowNetwork=true explicitly enables pip's default index. There is no custom index/credential configuration or ambient pip configuration inheritance.
+- VS Code 1.90 or later, on Windows, macOS or Linux.
+- Nothing else. No Python, no native libraries (no Cairo, no GTK runtime), no fonts package and no network access are required at runtime.
 
-prepareEnvironment exclusively creates setup.lock in the canonical store, reads the current state, bounds/snapshots/verifies the wheel and lock, probes the Python range, and creates a new envs/UUID venv at its final path. It never renames a built venv because entry-point paths can be absolute. A previous environment is never upgraded in place. Snapshot limits are 50,000,000 wheel bytes, 65,536 lock bytes and 16,384 bytes per state/ready manifest. Lock lines permit only unique exact name==version entries and comments; pip options, URLs, ranges and installer/Core entries are forbidden.
+## What the extension ships
 
-Python commands use -I and explicit UTF-8 mode, fixed argument lists, shell=false and hidden Windows windows. Ambient PYTHON*, PIP_*, VIRTUAL_ENV and __PYVENV_LAUNCHER__ are removed; pip config loading is disabled with PIP_CONFIG_FILE pointing to the null device. Necessary native-library environment settings, including VECTOR_PNG_CAIRO_DIR, are retained. After venv creation, the interpreter must prove that its prefix is the staged directory and differs from its base prefix. pip always runs through that interpreter with an explicit staged prefix, binary wheels only and an application-store download-cache. It does not install into or upgrade system Python. Failure to obtain a binary dependency is a setup failure, not a fallback source build.
+Everything the editor needs is inside the VSIX. The Core - PNG container handling, safe-svg-v1 validation, svg-normalization-v1 and rendering - is the TypeScript Core in `packages/ts-core`, bundled into the extension host code. Rendering uses the resvg engine compiled to WebAssembly (`@resvg/resvg-wasm`, MPL-2.0; the binary ships under `media/resvg/` in the package and is listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)). Monaco is bundled the same way under `media/monaco/`. Opening, previewing, saving, exporting and normalizing all run in-process in the extension host.
 
-Before activation, the manager checks all installed application versions against the snapshot lock, rejects unexpected application packages, runs pip check, and requires a matching Core/Python version and successful real 2×2 CairoSVG environment diagnosis. Only bootstrap pip/setuptools are exempt from application version locking. A fsynced ready.json records the immutable environment ID, Core/Python versions and wheel/lock digests. Progress callbacks report python, venv, venv-identity, install, packages, dependencies, render-health and activate stages. Callback code must not perform unrelated side effects.
+## Fonts
 
-activeEnvironment returns the selected entry and interpreter, or null for an empty store; corrupt state/manifests fail closed. runManagedCore selects a validated ready entry, clears ambient Python/pip redirects and calls the existing structured Core bridge from the application store. It never imports Core code from the document's directory. The environment is captured for that request; a later update cannot invalidate it because old environments are retained. Its usual Core timeout/output/cancellation boundaries from [BRIDGE.md](BRIDGE.md) apply.
+Text rendering uses the host's system fonts, loaded once per activation as buffers and handed to the renderer: the usual sans-serif families plus a CJK family when present (on this interim strategy, see Issue #61). A machine without a font covering some text renders that text with a fallback or not at all; installing a suitable system font is the remedy. No font is downloaded or bundled at this stage.
 
-## Activation and rollback
+## Build from source
 
-The sole selection pointer is active.json, containing protocol=1, active and previous entries. The manager rechecks its starting pointer and cancellation, fsyncs a complete replacement pointer, checks cancellation again and publishes it atomically. Initial creation uses a no-clobber hard link; updates use rename. Hard-link support is required for initial activation and there is no unsafe copy fallback. A setup that fails before this publication boundary leaves the previous pointer bytes unchanged. SVG/PNG documents and dirty editor buffers are not inputs to the setup API and are never written by it.
+```sh
+cd packages/ts-core && npm install && npm test
+cd ../extension && npm install && npm run check && npm test
+npx --yes @vscode/vsce package
+```
 
-rollbackEnvironment validates the recorded previous manifest/lock snapshot and reruns installed-package, dependency and real-render health checks before atomically swapping active/previous. A missing or unhealthy previous environment cannot replace the active selection. Both environments remain on disk; rollback can be retried or switched back only while the destination remains healthy. No automatic fallback, in-place repair or deletion occurs.
+Run the ts-core install first: the extension's suites import the TypeScript Core in-process and need its `@resvg/resvg-wasm` dependency present. The `vscode:prepublish` script copies Monaco, the profile schemas and the resvg wasm into `media/` and bundles the host code before packaging.
 
-The setup lock serializes cooperating processes for the same application store; parallel setup fails with busy. Cancellation before activation preserves the selected environment; process termination is best effort as in the bridge. Cancellation or an I/O/cleanup failure after the atomic commit boundary cannot promise that activation did not happen: callers must re-read activeEnvironment to determine the committed selection. No strict crash durability across directory updates, hostile-directory defense, non-cooperating store-writer compare-and-swap, stale-lock auto-recovery or native sandbox is claimed. Use the store only for application-managed data, not documents or shared mutable project folders.
+## History: the retired Python environment
 
-## Failures, recovery and evidence
-
-EnvironmentError exposes code, stage and a message limited to 2000 UTF-16 code units. Missing/unsupported Python, digest/lock errors, bad wheels, offline or failed installation, wrong package versions, dependency/native-render failure, timeout, cancellation and parallel setup all prevent pre-commit activation. Command stdout/stderr are bounded at 262,144/65,536 bytes. Per-command deadlines are Python probe/venv identity 15 seconds, venv creation 120 seconds, pip installation 300 seconds, and package listing/dependency/render health 30 seconds each. There is no single global setup deadline or hard native memory quota.
-
-Failed candidate environments, setup snapshots, cache and completed old environments remain for inspection. No automatic garbage collection removes an in-use interpreter. Handled failures release setup.lock; forceful termination can leave a stale lock or temporary pointer file. Confirm no setup process is running before manually recovering application-owned leftovers. Never remove the selected/previous environment merely because setup failed. Native Cairo remains separately configured; a native/render failure must be fixed before selecting the candidate.
-
-The integration test builds real dedicated environments in paths with spaces and Japanese characters, checks actual rendering, calls Core with poisoned ambient Python variables, attempts parallel setup, verifies offline/bad-wheel/unhealthy-wheel/cancelled candidates preserve active.json, switches between two independently built environments and verifies rollback and source preservation. Unit/fault tests cover version-range policy, missing Python, digest/lock failures, path traversal, stale locks, missing/unready rollback targets and process cancellation/timeouts. The two successful environments may contain the same Core version; this tests environment replacement and rollback, not a published version-to-version migration. [CORE_PROGRESS.md](CORE_PROGRESS.md) and the follow-up PR record executed results. All nine OS/Python CI cells run the real manager test against the built wheel, alongside the existing Core/bridge/package checks. These are hosted tests, not real-machine VS Code acceptance.
-
-## Extension commands (P2-07)
-
-The extension adds three commands. **Vector PNG: Set Up Python Environment** probes the usual interpreter candidates (`py -3.13/-3.12/-3.11/-3` on Windows; `python3.13`, `python3.12`, `python3.11`, `python3`, `python` elsewhere) with an isolated `-I -c` version probe - discovery never modifies anything - and explains a miss (no Python, or only unsupported versions) with per-platform install guidance. With a supported interpreter it locates trusted Core artifacts (a `vectorPng.coreWheelPath` setting, else a wheel bundled under the extension's `managed/` directory, else a sibling checkout's `packages/core/dist`), asks before using the network (default is offline with a local wheelhouse only), and runs the manager above with progress and cancellation. A failure or cancellation leaves the previously active environment and all documents untouched. **Vector PNG: Python Environment Status** reports the configured, managed and effective interpreters. **Vector PNG: Roll Back Python Environment** delegates to the manager's health-checked rollback.
-
-Python resolution for previews and saving is: the `vectorPng.corePythonPath` setting when set, otherwise the managed environment's active interpreter, otherwise unavailable (the saved PNG preview keeps working). A corrupt environment store fails closed and is reported as no managed environment rather than guessed at. The extension ships a copy of the repository `requirements.lock` under `packages/extension/managed/` for packaging; a test keeps it byte-identical to the canonical lock.
+Earlier development builds ran a Python Core from a managed virtual environment, with "Set Up Python Environment" / "Python Environment Status" / "Roll Back Python Environment" commands, `vectorPng.corePythonPath` / `vectorPng.coreWheelPath` settings and a bundled wheel. The TypeScript migration (Issues #58-#61) ported every feature in-process, and Phase 3 removed the Python package, the CLI and the environment machinery entirely. Builds from before that change keep working as installed, but no current build contains or needs them; the historical record is in [CORE_PROGRESS.md](CORE_PROGRESS.md) and [EXTENSION_PROGRESS.md](EXTENSION_PROGRESS.md).

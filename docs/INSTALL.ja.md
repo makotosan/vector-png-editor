@@ -1,45 +1,40 @@
-# 実験的な専用Python環境管理
+# Vector PNG Editorのインストール
 
 [English](INSTALL.md)
 
-## 範囲と前提条件
+## リリースからのインストール
 
-packages/bridge/src/environment.tsはprepareEnvironment、activeEnvironment、runManagedCore、rollbackEnvironmentを提供します。P2-07以降、VS Code拡張がPython自動検出と利用者向けsetupコマンド（後述）でこのmanagerを統合しています。native Cairo導入、Core wheelのVSIX同梱、拡張hostテスト、release manifestは残課題で、製品全体・安定版は未完成です。
+GitHubリリースから `.vsix` をダウンロードし、VS Codeにインストールします。
 
-信頼済みの絶対Python実行パス、Python 3.11〜3.13、そのinterpreter用に設定したnative Cairo、信頼済みvector-png-editor-coreのpure-Python wheel、このリポジトリーの[requirements.lock](../requirements.lock)を使います。wheelとlockの両方に、信頼済み呼び出し側設定から与える小文字SHA-256期待値が必要です。任意のdownload自体から計算したdigestは、その出所を認証しません。runtimeテストはNode 24内蔵のTypeScript型除去を使い、静的型検査・buildやVS CodeのNode互換性は主張しません。このAPIは同梱Python・native library・fontを導入しません。
+```sh
+code --install-extension vector-png-editor-<version>.vsix
+```
 
-lockは管理処理でテストするアプリruntime依存9個を固定します。Pillow 13.0.0、CairoSVG 2.9.1、defusedxml 0.7.1、cairocffi 1.7.1、cffi 2.1.1、cssselect2 0.10.1、tinycss2 1.5.1、pycparser 3.12、webencodings 0.6.1です。依存wheelのhash lockではなくversion lockです。Python、native Cairo、font、bootstrap pip／setuptoolsは対象外です。導入Core版は選択wheel版と厳密に一致する必要があります。Coreの通常pip導入は直接依存固定のままで、この別管理用lockは自動適用しません。lock変更はレビューとOS／Pythonテストを伴う明示的なものとし、上流へ自動追従しません。
+（またはコマンドパレットの「Extensions: Install from VSIX...」を使います。）インストールはこれで完了です。環境セットアップの手順はなく、拡張が追加のダウンロードを求めることもありません。
 
-## 環境の準備と使用
+## 要件
 
-APIはroot（アプリ所有の絶対パスのprivate保存先）、python（絶対実行パス）、wheel、wheelSha256、version、requirements、requirementsSha256と、任意のallowNetwork、wheelhouse、env、signal、onProgressを受け取ります。versionは現在major.minor.patchと任意の.devNに対応し、Core成果物はpure-Python wheel名で導入します。既定のsetupはofflineで、任意のローカルwheelhouseからwheelを供給できます。allowNetwork=trueはpipの既定indexを明示的に有効にします。独自index・認証設定や周囲のpip設定の継承はありません。
+- VS Code 1.90以降（Windows、macOS、Linux）。
+- それ以外は何も要りません。実行時にPython、ネイティブライブラリ（CairoやGTKランタイム）、フォントパッケージ、ネットワーク接続はいずれも不要です。
 
-prepareEnvironmentは正規化した保存先でsetup.lockを排他作成し、現在の状態を読み、wheelとlockを上限付きで取得・snapshot・検証し、Python範囲を検査して、最終パスenvs/UUIDに新しいvenvを作ります。entry pointのパスが絶対値になり得るため、構築したvenvを改名しません。旧環境をその場で更新しません。snapshot上限はwheel 50,000,000 bytes、lock 65,536 bytes、状態・ready manifest各16,384 bytesです。lock行は重複しない厳密なname==versionとコメントだけを許可し、pip option、URL、範囲指定、installer／Core項目を禁止します。
+## 拡張に同梱されるもの
 
-Pythonコマンドは-Iと明示UTF-8 mode、固定引数一覧、shell=false、非表示Windowsウィンドウを使います。周囲のPYTHON*、PIP_*、VIRTUAL_ENV、__PYVENV_LAUNCHER__を除き、PIP_CONFIG_FILEをnull deviceへ向けてpip設定の読み込みを無効化します。VECTOR_PNG_CAIRO_DIRを含む必要なnative library環境設定は保持します。venv作成後、interpreterはprefixが新規構築directoryと一致し、base prefixと異なることを証明する必要があります。pipは必ずそのinterpreterから、明示的な構築先prefix、binary wheel限定、アプリ保存先のdownload-cacheで実行します。system Pythonへ導入・更新しません。binary依存を取得できない場合はsetup失敗とし、source buildへfallbackしません。
+エディタが必要とするものはすべてVSIXの中にあります。Core（PNGコンテナ処理、safe-svg-v1検証、svg-normalization-v1、正規化と描画）は `packages/ts-core` のTypeScript Coreで、拡張ホストのコードにバンドルされます。描画にはWebAssembly化したresvgエンジン（`@resvg/resvg-wasm`、MPL-2.0）を使い、バイナリはパッケージ内の `media/resvg/` に入り、[THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md)に記載します。Monacoも同様に `media/monaco/` に同梱されます。開く、プレビュー、保存、書き出し、正規化はすべて拡張ホスト内でインプロセスに動作します。
 
-有効化前に、導入済みアプリ版すべてをsnapshot lockと照合し、想定外のアプリpackageを拒否し、pip checkを実行し、Core／Python版一致と実際の2×2 CairoSVG環境診断成功を要求します。bootstrap pip／setuptoolsだけはアプリ版固定から除外します。fsyncしたready.jsonに不変の環境ID、Core／Python版、wheel／lock digestを記録します。進捗callbackはpython、venv、venv-identity、install、packages、dependencies、render-health、activateの各段階を報告します。callbackコードは無関係な副作用を起こしてはいけません。
+## フォント
 
-activeEnvironmentは選択entryとinterpreterを返し、空の保存先ではnullを返します。不正な状態・manifestは安全側に失敗します。runManagedCoreは検証済みready entryを選び、周囲のPython／pipの転送設定を除き、アプリ保存先から既存の構造化Core bridgeを呼びます。文書directoryからCoreコードをimportしません。その要求には環境を固定し、後から更新されても旧環境を保持するため無効化されません。[BRIDGE.ja.md](BRIDGE.ja.md)の通常のCore timeout・出力・取消の境界を適用します。
+テキスト描画にはホストのシステムフォントを使い、アクティベーション時に一度だけバッファとして読み込んで描画器へ渡します。通常のサンセリフ系ファミリーに加え、存在すればCJKファミリーも対象です（当面の暫定方針。Issue #61参照）。ある文字をカバーするフォントがないマシンでは、そのテキストは代替フォントで描かれるか描かれません。適切なシステムフォントの導入が対処です。この段階ではフォントのダウンロードも同梱もしません。
 
-## 有効化と切り戻し
+## ソースからのビルド
 
-唯一の選択pointerはactive.jsonで、protocol=1、active、previous entryを持ちます。開始時pointerと取消を再確認し、完全な置換pointerをfsyncし、取消をもう一度検査してatomic公開します。初回作成は上書きしないhard link、更新はrenameを使います。初回有効化にはhard link対応が必要で、安全でないcopyへのfallbackはありません。この公開境界前に失敗したsetupは旧pointerのbyteを変更しません。SVG／PNG文書やエディターの未保存bufferはsetup APIの入力ではなく、書き込みません。
+```sh
+cd packages/ts-core && npm install && npm test
+cd ../extension && npm install && npm run check && npm test
+npx --yes @vscode/vsce package
+```
 
-rollbackEnvironmentは記録済みpreviousのmanifest／lock snapshotを検証し、導入package・依存・実描画の健全性を再検査してからactive／previousをatomicに入れ替えます。previousが欠落・不健全な場合はactive選択を置換できません。両環境をdiskに残し、切り戻しの再試行や再切替は切替先が健全な間だけ可能です。自動fallback、その場での修復、削除は行いません。
+ts-coreのインストールを先に実行してください。拡張のスイートはTypeScript Coreをインプロセスに読み込むため、その `@resvg/resvg-wasm` 依存が必要です。`vscode:prepublish` スクリプトがMonaco、プロファイルのスキーマ、resvgのwasmを `media/` へコピーし、ホストコードをバンドルしてからパッケージ化します。
 
-setup lockは同じアプリ保存先の協調processを直列化し、並行setupはbusyで失敗します。有効化前の取消は選択環境を保持し、process終了はbridgeと同じbest effortです。atomic確定境界後の取消やI/O・cleanup失敗では、有効化が行われなかったと保証できません。呼び出し側はactiveEnvironmentを再読して確定選択を判断する必要があります。directory更新をまたぐ厳密なcrash耐久性、危険directoryへの防御、非協調保存先ライターとのcompare-and-swap、古いlockの自動復旧、native sandboxは主張しません。保存先にはアプリ管理dataだけを置き、文書や共有の変更可能なproject folderには使わないでください。
+## 履歴：廃止されたPython環境
 
-## 失敗、復旧と検証根拠
-
-EnvironmentErrorはcode、stage、最大2000 UTF-16 code unitsのmessageを公開します。Python不在・未対応、digest／lock不正、不正wheel、offline・導入失敗、package版不一致、依存・native描画失敗、timeout、取消、並行setupはすべて確定前の有効化を防ぎます。コマンドstdout／stderr上限は262,144／65,536 bytesです。コマンド別期限はPython検出・venv identityが15秒、venv作成120秒、pip導入300秒、package一覧・依存・描画健全性が各30秒です。setup全体の単一期限や厳密native memory quotaはありません。
-
-失敗candidate環境、setup snapshot、cache、完成した旧環境は調査用に残します。使用中interpreterを削除する自動garbage collectionはありません。処理可能な失敗ではsetup.lockを解放しますが、強制終了で古いlockや一時pointer fileが残る可能性があります。setup processが動いていないことを確認してから、アプリ所有の残存物を手動復旧します。setup失敗だけを理由に選択・previous環境を削除してはいけません。native Cairoは別途設定し、native／描画失敗を解消してからcandidateを選択します。
-
-統合テストでは、空白と日本語を含むパスで実際の専用環境を構築し、実描画を検査し、周囲のPython変数を不正にしたCore呼び出し、並行setup、offline・不正wheel・不健全wheel・取消candidateでのactive.json保持、独立構築した2環境の切替、切り戻し、原文保持を検証します。単体・障害テストは版範囲方針、Python不在、digest／lock失敗、path traversal、古いlock、切り戻し先欠落・未準備、process取消・timeoutを対象とします。成功する2環境は同じCore版を含む場合があり、環境置換と切り戻しの検査であって、公開版間の移行検査ではありません。[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)と今回のPRに実行結果を記録します。OS／Python全9組のCIでも既存Core・bridge・package検査とともに、作成wheelに対する実際の管理テストを実行します。hostedテストであり、実機VS Code受け入れではありません。
-
-## 拡張コマンド（P2-07）
-
-拡張は3つのコマンドを追加します。**Vector PNG: Set Up Python Environment** は、通常のinterpreter候補（Windowsでは `py -3.13/-3.12/-3.11/-3`、その他では `python3.13`、`python3.12`、`python3.11`、`python3`、`python`）を隔離した `-I -c` の版probeで調べます。検出は何も変更しません。見つからない場合（Python不在、または未対応版のみ）は、プラットフォーム別の導入案内とともに説明します。対応interpreterがあれば、信頼できるCore成果物（`vectorPng.coreWheelPath` 設定、なければ拡張の `managed/` ディレクトリーに同梱されたwheel、なければ兄弟checkoutの `packages/core/dist`）を特定し、ネットワーク使用前に確認を取り（既定はローカルwheelhouseのみのoffline）、進行表示と取消つきで上記managerを実行します。失敗・取消では、それまで有効だった環境と全ての文書は無傷のままです。**Vector PNG: Python Environment Status** は設定済み・管理下・実効のinterpreterを表示します。**Vector PNG: Roll Back Python Environment** はmanagerの健全性検査付きrollbackへ委譲します。
-
-プレビューと保存のPython解決順は、`vectorPng.corePythonPath` 設定があればそれ、なければ管理下環境の有効なinterpreter、どちらもなければ利用不可（保存済みPNGプレビューは動き続けます）です。破損した環境storeはfail-closedとし、管理下環境なしとして扱い、推測はしません。拡張はパッケージ用にリポジトリーの `requirements.lock` のコピーを `packages/extension/managed/` に同梱し、テストが正本lockとバイト単位で同一に保ちます。
+初期の開発ビルドは、管理対象の仮想環境からPython Coreを動かし、「Set Up Python Environment」「Python Environment Status」「Roll Back Python Environment」コマンド、`vectorPng.corePythonPath`／`vectorPng.coreWheelPath` 設定、同梱wheelを備えていました。TypeScript移行（Issue #58〜#61）で全機能がインプロセスへ移植され、Phase 3でPythonパッケージ、CLI、環境機構はすべて除去されました。それ以前のビルドはインストール済みのまま動作しますが、現在のビルドにはそれらは含まれず、必要でもありません。歴史的な記録は[CORE_PROGRESS.ja.md](CORE_PROGRESS.ja.md)と[EXTENSION_PROGRESS.ja.md](EXTENSION_PROGRESS.ja.md)にあります。

@@ -2,13 +2,11 @@
 
 [English](README.md)
 
-PNG内のSVGを編集するVS Code拡張＋Python Core＋独立したpip CLIです。SVGを正本、PNGラスターを派生データとします。状態はinspect／extract／validate／build／verify／rebuildを持つ実験的Phase 1 Coreであり、VS Code editorと安定版は未実装です。
+PNG内のSVGを編集するVS Code拡張です。Core（packages/ts-core）はTypeScriptで拡張ホスト内にインプロセス動作し、Pythonコンポーネントも独立CLIもありません。SVGを正本、PNGラスターを派生データとします。状態は実験的段階で、エディタはTypeScript Coreによるinspect／extract／validate／build／rebuild、svg-normalization-v1、resvg描画を提供し、安定版の条件は受入記録のとおり未完了です。
 
-- [専用Python環境の構築と切り戻し](docs/INSTALL.ja.md)
-- [JSON bridgeと環境診断](docs/BRIDGE.ja.md)
+- [インストール（Python不要、セットアップなし）](docs/INSTALL.ja.md)
 - [書き込みと競合制御の境界](docs/WRITING.ja.md)
-- [現在のCore進捗と根拠](docs/CORE_PROGRESS.ja.md)
-- [操作用JSON CLI契約](docs/CLI.ja.md)
+- [Python Coreの進捗と根拠（歴史的記録）](docs/CORE_PROGRESS.ja.md)
 - [Phase 0調査結果](docs/PHASE0.ja.md)
 - [構成と確定製品要件](docs/ARCHITECTURE.ja.md)
 - [互換性記録](docs/SPEC_COMPATIBILITY.ja.md)

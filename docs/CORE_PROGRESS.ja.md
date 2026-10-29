@@ -15,7 +15,7 @@ P1-01／P1-02としてpackages/coreに実験的Python package、公開API、insp
 - SPEC §§5、7：受動inspect／extractは描画もsafe-svg-v1適用もしません。container-positiveな危険SVGと異なるrasterを受動抽出できます。validateはprofile検査、実描画、未確認のpreview一致を分離します。自動normalizationや外部取得はしません。
 - SPEC §6：抽出はno-clobber atomic公開で、失敗時に入力を保持します。editorの上書き・保存・並行処理transactionは未実装です。
 
-正確なJSON field、終了コード、上限は[CLI.ja.md](CLI.ja.md)に記録します。wire keyword、iTXt payload、固定仕様は変えず、形式移行は不要です。language tag registry検証、ancillary payloadの意味、広範decoder検証が未完了なので、container結果は意図的にpassed-supported-checksとします。有限testから完全準拠を主張しません。font依存native rendererは汎用の画素判定基準ではありません。
+正確なJSON field、終了コード、上限はCLI.ja.mdに記録します。wire keyword、iTXt payload、固定仕様は変えず、形式移行は不要です。language tag registry検証、ancillary payloadの意味、広範decoder検証が未完了なので、container結果は意図的にpassed-supported-checksとします。有限testから完全準拠を主張しません。font依存native rendererは汎用の画素判定基準ではありません。
 
 ## 検証と配布状態
 
@@ -40,7 +40,7 @@ Core 0.1.0.dev2はbuild／verify／rebuild、原文保持生成、厳密なロ�
 
 ## JSON bridge追加
 
-Core 0.1.0.dev3は全6コマンド向けの厳密な上限付きprotocol-1 stdin要求、正確なinline原文バイト、出力上限・期限・読み取り専用取消・世代による古いプレビュー結果拒否を備えたTypeScriptアダプター、読み取り専用のPython・直接依存・実描画環境診断を追加します。完全な要求schemaと境界は[BRIDGE.ja.md](BRIDGE.ja.md)を参照してください。Windows／Python 3.13.5のローカルPythonテスト116件が45.48秒で合格し、実際のPython呼び出しを含むNode 24 bridgeテスト15件が合格しました。wheel／sdistを作成しました。導入smokeとhosted CI根拠は実行後に今回のPRへ記録します。P1-04は一部実装で、native・推移的依存固定、穏当なrenderer取消・出力上限、管理venv更新・切り戻し、拡張host受け入れは残ります。これらのテストは任意ライターとの競合制御や形式完全準拠を証明しません。README、CLI、互換性、進捗、bridgeの日英ペアを節ごとに照合し、例、表、参照先、上限、状態、取消・失敗時保証を含む全文の意味の一致を確認しました。上記の書込・初期基準の結果は過去の根拠であり、PR #24はマージ済みです。
+Core 0.1.0.dev3は全6コマンド向けの厳密な上限付きprotocol-1 stdin要求、正確なinline原文バイト、出力上限・期限・読み取り専用取消・世代による古いプレビュー結果拒否を備えたTypeScriptアダプター、読み取り専用のPython・直接依存・実描画環境診断を追加します。完全な要求schemaと境界はBRIDGE.ja.mdを参照してください。Windows／Python 3.13.5のローカルPythonテスト116件が45.48秒で合格し、実際のPython呼び出しを含むNode 24 bridgeテスト15件が合格しました。wheel／sdistを作成しました。導入smokeとhosted CI根拠は実行後に今回のPRへ記録します。P1-04は一部実装で、native・推移的依存固定、穏当なrenderer取消・出力上限、管理venv更新・切り戻し、拡張host受け入れは残ります。これらのテストは任意ライターとの競合制御や形式完全準拠を証明しません。README、CLI、互換性、進捗、bridgeの日英ペアを節ごとに照合し、例、表、参照先、上限、状態、取消・失敗時保証を含む全文の意味の一致を確認しました。上記の書込・初期基準の結果は過去の根拠であり、PR #24はマージ済みです。
 
 ## 専用Python環境管理の追加
 
