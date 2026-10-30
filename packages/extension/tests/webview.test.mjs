@@ -198,3 +198,33 @@ test('host-originated syncs are undoable Monaco edits, not setValue (Issue #18 i
   const initBlock = js.slice(js.indexOf("message.type === 'init'"), js.indexOf("message.type === 'rootFill'"));
   assert.match(initBlock, /editor\.setValue\(message\.source\);/);
 });
+
+test('host-originated syncs tag their preview render with the last webview revision (live check, 2026-10-30)', async () => {
+  // extension.ts runs only inside the VS Code host (it imports
+  // 'vscode'), so - as with the other provider-wiring tests in this
+  // file - this pins the wiring in the host source. The behaviour it
+  // protects: the webview clears its "Rendering the editing preview…"
+  // status only when a render arrives tagged with the webview's own
+  // revision counter (previewState.editedRevision >= revision in
+  // editor.js), and that counter advances only on typed edits. A
+  // host-originated sync (FILL Apply, Format, Normalize, host
+  // undo/redo, external reload) must therefore schedule its render
+  // under the last revision the webview reported; tagging it -1 left
+  // the status up forever even though the image updated.
+  const host = await readFile(new URL('../src/extension.ts', import.meta.url), 'utf8');
+  const declaration = host.indexOf('let lastWebviewRevision = 0;');
+  assert.ok(declaration !== -1, 'the panel tracks the last known webview revision, starting at 0');
+  const syncStart = host.indexOf('document.onSourceSync(panelId,');
+  assert.ok(declaration < syncStart, 'the tracker is declared before the sync subscription that reads it');
+  const syncBlock = host.slice(syncStart, host.indexOf('document.onSaved('));
+  assert.match(syncBlock, /preview\?\.schedule\(source, lastWebviewRevision\);/,
+    'a host-originated sync schedules its render under the last known webview revision');
+  assert.ok(!host.includes('schedule(source, -1)'), 'no preview render is tagged -1');
+  const changedBlock = host.slice(host.indexOf("message.type === 'sourceChanged'"), host.indexOf("message.type === 'setPreviewMode'"));
+  assert.match(changedBlock, /lastWebviewRevision = message\.revision;/,
+    'the sourceChanged handler updates the tracker from the webview report');
+  assert.match(changedBlock, /preview\?\.schedule\(next, message\.revision\);/,
+    'typed edits still schedule under their own revision');
+  assert.match(host, /preview\?\.schedule\(document\.pendingSource, lastWebviewRevision\);/,
+    'the initial render goes through the same tracker (still 0 before any typing)');
+});
